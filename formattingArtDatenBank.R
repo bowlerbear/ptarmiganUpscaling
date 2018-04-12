@@ -24,6 +24,10 @@ plot(Norway)
 plot(lirype,add=T)
 #all points look pretty good!! few in the sea
 
+###############################################################
+#exclude Nov to March  - rock and willow both have white coats#
+###############################################################
+
 #overlay to a grid
 #make 10 km (0.1) x 10(0.1) km grid
 library(raster)
@@ -191,33 +195,43 @@ ggsave("occupancyMap_0.5.png")
 
 ########################################################################
 
+#get function to extract raster into for these grids:
+
+getEnvironData<-function(myraster,mygrid,rasterCRS="+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"){
+  #convert into points
+  myraster<-crop(myraster,extent(Norway))
+  myrasterDF<-as.data.frame(myraster,xy=T)
+  names(myrasterDF)[3]<-"myraster"
+  coordinates(myrasterDF)<-c("x","y")
+  proj4string(myrasterDF)<-CRS(rasterCRS) 
+  projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
+  
+  #get myraster values per grid cell
+  mygrid[]<-1:ncell(mygrid)
+  variable<-extract(mygrid,myrasterDF)
+  myrasterDF<-data.frame(myrasterDF@data)
+  myrasterDF$grid<-variable
+  myrasterDF<-ddply(myrasterDF,.(grid),summarise,myraster=mean(myraster,na.rm=T))
+  return(myrasterDF)
+}
+
+#######################################################################
 #get accessibility map
 #https://www.nature.com/articles/nature25181
 setwd("C:/Users/diana.bowler/OneDrive - NINA/maps/accessibility/accessibility_to_cities_2015_v1.0")
 library(raster)
 library(maptools)
 access<-raster("accessibility_to_cities_2015_v1.0.tif")
+out<-
 
-#convert into points
-access<-crop(access,extent(Norway))
-accessDF<-as.data.frame(access,xy=T)
-names(accessDF)[3]<-"access"
-accessDF$access<-sapply(accessDF$access,function(x)ifelse(x==-9999,NA,x))
-coordinates(accessDF)<-c("x","y")
-proj4string(accessDF)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
-projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
+  myrasterDF$myraster<-sapply(myrasterDF$myraster,function(x)ifelse(x==-9999,NA,x))
 
-#get average accessibility per grid cell
-mygrid[]<-1:ncell(mygrid)
-variable<-extract(mygrid,accessDF)
-accessDF<-data.frame(accessDF@data)
-accessDF$grid<-variable
-accessDF<-ddply(accessDF,.(grid),summarise,access=mean(access,na.rm=T))
+  
+#Add to the bugs data
 bugs.data$access = accessDF$access[match(listlengthDF$grid,accessDF$grid)]
 bugs.data$access[is.na(bugs.data$access)]<-mean(bugs.data$access,na.rm=T)
 
-#exclude Nov to March  - rock and willow both have white coats
-#################################################################
+###########################################################################################
 
 #run model including the accessibility term
 
