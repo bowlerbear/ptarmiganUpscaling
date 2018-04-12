@@ -200,19 +200,24 @@ ggsave("occupancyMap_0.5.png")
 
 getEnvironData<-function(myraster,mygridTemp){
   require(maptools)
-  #convert into points
+  
+  #crop raster to Norway extent
   rasterCRS<-crs(myraster)
   Norway<-spTransform(Norway,rasterCRS)
   myraster<-crop(myraster,extent(Norway))
+  
+  #convert raster into points and convert to lon lat
   myrasterDF<-as.data.frame(myraster,xy=T)
   names(myrasterDF)[3]<-"myraster"
   coordinates(myrasterDF)<-c("x","y")
   proj4string(myrasterDF)<-rasterCRS
   myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+  
+  #get general grid
   grid<-gridTemp
   projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
   
-  #get myraster values per grid cell
+  #get mean myraster values per grid cell
   mygrid[]<-1:ncell(mygrid)
   variable<-extract(mygrid,myrasterDF)
   myrasterDF<-data.frame(myrasterDF@data)
@@ -326,6 +331,7 @@ summary(out$myraster)
 
 #Add to the bugs data
 bugs.data$elevation = out$myraster[match(listlengthDF$grid,out$grid)]
+summary(bugs.data$elevation)
 
 ######################################################################################################
 
