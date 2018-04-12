@@ -222,8 +222,9 @@ setwd("C:/Users/diana.bowler/OneDrive - NINA/maps/accessibility/accessibility_to
 library(raster)
 library(maptools)
 access<-raster("accessibility_to_cities_2015_v1.0.tif")
-out<-
+out<-getEnvironData(access,mygrid)
 
+#check data
   myrasterDF$myraster<-sapply(myrasterDF$myraster,function(x)ifelse(x==-9999,NA,x))
 
   
