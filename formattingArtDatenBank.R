@@ -35,6 +35,7 @@ mygrid<-raster(extent(Norway))
 res(mygrid)<-newres
 mygrid[]<-1:ncell(mygrid)
 plot(mygrid)
+gridTemp<-mygrid
 
 #get grid number for each point
 lirype$grid<-extract(mygrid,lirype)
@@ -197,13 +198,18 @@ ggsave("occupancyMap_0.5.png")
 
 #get function to extract raster into for these grids:
 
-getEnvironData<-function(myraster,mygrid,rasterCRS="+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0"){
+getEnvironData<-function(myraster,mygridTemp){
+  require(maptools)
   #convert into points
+  rasterCRS<-crs(myraster)
+  Norway<-spTransform(Norway,rasterCRS)
   myraster<-crop(myraster,extent(Norway))
   myrasterDF<-as.data.frame(myraster,xy=T)
   names(myrasterDF)[3]<-"myraster"
   coordinates(myrasterDF)<-c("x","y")
-  proj4string(myrasterDF)<-CRS(rasterCRS) 
+  proj4string(myrasterDF)<-rasterCRS
+  myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+  grid<-gridTemp
   projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
   
   #get myraster values per grid cell
@@ -225,14 +231,14 @@ access<-raster("accessibility_to_cities_2015_v1.0.tif")
 out<-getEnvironData(access,mygrid)
 
 #check data
-  myrasterDF$myraster<-sapply(myrasterDF$myraster,function(x)ifelse(x==-9999,NA,x))
+hist(out$myraster)
+summary(out$myraster)
 
-  
 #Add to the bugs data
-bugs.data$access = accessDF$access[match(listlengthDF$grid,accessDF$grid)]
-bugs.data$access[is.na(bugs.data$access)]<-mean(bugs.data$access,na.rm=T)
+bugs.data$access = out$myraster[match(listlengthDF$grid,out$grid)]
 
-###########################################################################################
+#Fill in blanks with mean for the moment...
+bugs.data$access[is.na(bugs.data$access)]<-mean(bugs.data$access,na.rm=T)
 
 #run model including the accessibility term
 
@@ -305,12 +311,21 @@ plot(rasterPop)
 #elevation map
 tdir<-"R:/GeoSpatialData/Elevation/Europe_EU_DSM_25m"#there are higher resolution ones
 elevation<-raster(paste(tdir,"eudem_dem_3035_europe.tif",sep="/"))
-Norway<-spTransform(Norway,crs(elevation))
+#its really high resolution to lower it
+rasterCRS<-crs(elevation)
+Norway<-spTransform(Norway,rasterCRS)
 elevation<-crop(elevation,extent(Norway))
-elevation<-mask(elevation,Norway)
-plot(elevation)
+elevation<-aggregate(elevation,fact=100,fun=mean)
 
-#convert to a point data frame
+#extract the data
+out<-getEnvironData(elevation,mygrid)
+
+#check data
+hist(out$myraster)
+summary(out$myraster)
+
+#Add to the bugs data
+bugs.data$elevation = out$myraster[match(listlengthDF$grid,out$grid)]
 
 ######################################################################################################
 
