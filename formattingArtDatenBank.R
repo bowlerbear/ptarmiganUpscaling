@@ -1,5 +1,6 @@
 #get norway##############################################################
 
+library(raster)
 library(maptools)
 data(wrld_simpl)
 Norway<- subset(wrld_simpl,NAME=="Norway")
@@ -7,8 +8,10 @@ plot(Norway)
 
 ########################################################################
 
-#choose modelling resolution
+#choose modelling resolution:
+
 newres=1
+
 newres=0.5
 
 #########################################################################
@@ -149,51 +152,6 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   L = listlengthDF$L - median(listlengthDF$L),
                   y = occupancyDF$y)
 
-
-#specify parameters to monitor
-source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
-params <- c("psi.fs","dtype.p","mu.lp")
-
-#need to specify initial values
-library(reshape2)
-zst <- acast(occupancyDF, grid~year, value.var="y",fun=max)
-zst [is.infinite(zst)] <- 0
-inits <- function(){list(z = zst)}
-
-#run model
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta.txt", n.thin=nt,
-             n.chains=3, n.burnin=500,n.iter=10000)
-
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_0.5_BUGS_sparta.RData")
-print(out1,2)
-
-#plot time series of occupancy
-psiSummary<-data.frame(out1$summary[grepl("psi.fs",row.names(out1$summary)),])
-psiSummary$Year <- 2007:2017
-ggplot(psiSummary)+
-  geom_line(aes(x=Year,y=mean))+
-  geom_ribbon(aes(x=Year,ymin=X2.5.,ymax=X97.5.),alpha=0.5)+
-  theme_bw()
-ggsave("ts.png")
-
-#plot occupancy model
-out2<-update(out1,parameters.to.save="z",n.iter=2000)
-zSummary<-data.frame(out2$summary[grepl("z",row.names(out2$summary)),])
-zSummary$ParamNu <- as.character(sub(".*\\[([^][]+)].*", "\\1", row.names(zSummary)))
-zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
-zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
-zSummary$grid<-listlengthDF$grid[match(zSummary$Site,listlengthDF$siteIndex)]
-
-#predicted occupancy across all years
-zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean))
-mygrid[]<-0
-mygrid[zSummary_year$grid]<-zSummary_year$prop
-plot(mygrid)
-plot(Norway,add=T)
-ggsave("occupancyMap_0.5.png")
-
 ########################################################################
 
 #get function to extract raster into for these grids:
@@ -226,12 +184,27 @@ getEnvironData<-function(myraster,mygridTemp){
   return(myrasterDF)
 }
 
+plotBUGSData<-function(myvar){
+  temp<-listlengthDF
+  temp<-subset(temp,siteIndex %in% bugs.data$site)
+  temp$variable<-as.numeric(bugs.data[myvar][[1]])[match(temp$siteIndex,bugs.data$site)]
+  temp$variablePA<-sapply(temp$variable,function(x)ifelse(is.na(x),0,1))
+  temp<-subset(temp,!duplicated(siteIndex))
+  mygrid<-gridTemp
+  par(mfrow=c(1,2))
+  mygrid[]<-0
+  mygrid[temp$grid]<-temp$variable
+  plot(mygrid)
+  mygrid[]<-0
+  mygrid[temp$grid]<-temp$variablePA
+  plot(mygrid)
+}
+
 #######################################################################
+
 #get accessibility map
 #https://www.nature.com/articles/nature25181
 setwd("C:/Users/diana.bowler/OneDrive - NINA/maps/accessibility/accessibility_to_cities_2015_v1.0")
-library(raster)
-library(maptools)
 access<-raster("accessibility_to_cities_2015_v1.0.tif")
 out<-getEnvironData(access,mygrid)
 
@@ -242,31 +215,15 @@ summary(out$myraster)
 #Add to the bugs data
 bugs.data$access = out$myraster[match(listlengthDF$grid,out$grid)]
 
-#Fill in blanks with mean for the moment...
-bugs.data$access[is.na(bugs.data$access)]<-mean(bugs.data$access,na.rm=T)
+#plotting
+plot(access)
+plotBUGSData("access")
 
-#run model including the accessibility term
-
-#specify parameters to monitor
-source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
-params <- c("psi.fs","dtype.p","mu.lp","beta.access")
-
-#need to specify initial values
-library(reshape2)
-zst <- acast(occupancyDF, grid~year, value.var="y",fun=max)
-zst [is.infinite(zst)] <- 0
-inits <- function(){list(z = zst)}
-
-#run model
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/SpeciesMapServices")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_access.txt", n.thin=nt,
-             n.chains=3, n.burnin=500,n.iter=2000)
-
-print(out1,2)
+rm(access)
 
 #############################################################################################
 
-#get human density map
+#get human density map???
 
 #Europe_GEOSTAT_1km2_population
 setwd("R:/GeoSpatialData/Population_demography/Europe_GEOSTAT_1km2_population/Original")
@@ -320,7 +277,7 @@ elevation<-raster(paste(tdir,"eudem_dem_3035_europe.tif",sep="/"))
 rasterCRS<-crs(elevation)
 Norway<-spTransform(Norway,rasterCRS)
 elevation<-crop(elevation,extent(Norway))
-elevation<-aggregate(elevation,fact=100,fun=mean)
+elevation<-aggregate(elevation,fact=50,fun=mean)
 
 #extract the data
 out<-getEnvironData(elevation,mygrid)
@@ -333,16 +290,210 @@ summary(out$myraster)
 bugs.data$elevation = out$myraster[match(listlengthDF$grid,out$grid)]
 summary(bugs.data$elevation)
 
+#plotting
+plot(elevation)
+plotBUGSData("elevation")
+
+rm(elevation)
 ######################################################################################################
 
-#habitats
-setwd("R:/GeoSpatialData/Habitats_biotopes/Europe_EU_DSM_25m")
-Norway_Naturbase??
+#habitats:
+setwd("R:/GeoSpatialData/LandCover/Norway_Satveg_NORUT/Original/Satveg_deling_nd_partnere_09_12_2009/tiff")
+library(raster)
+habitatRaster<-raster("NNred25-30-t1.tif")#30 x 30 m)
+habitatRaster[habitatRaster>24]<-NA
+habitatRaster[habitatRaster==22]<-NA
+habitatRaster2<-aggregate(habitatRaster,fact=10,fun=modal,na.rm=T)
+plot(habitatRaster2)
+
+#plot each grid, extract what????
+#crop raster to Norway extent
+myraster<-habitatRaster2
+rasterCRS<-crs(myraster)
+
+#convert raster into points and convert to lon lat
+myrasterDF<-as.data.frame(myraster,xy=T)
+names(myrasterDF)[3]<-"myraster"
+myrasterDF<-subset(myrasterDF,!is.na(myraster))
+coordinates(myrasterDF)<-c("x","y")
+proj4string(myrasterDF)<-rasterCRS
+myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+
+#get general grid
+mygrid<-gridTemp
+projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
+
+#get myraster values per grid cell
+mygrid[]<-1:ncell(mygrid)
+variable<-extract(mygrid,myrasterDF)
+myrasterDF<-data.frame(myrasterDF@data)
+myrasterDF$grid<-variable
+library(reshape2)
+myrasterDF2<-melt(table(myrasterDF$grid,myrasterDF$myraster))
+names(myrasterDF2)<-c("grid","raster","count")
+
+#get rid of 0s
+myrasterDF2<-subset(myrasterDF2,raster!=0)
+
+#simplify habitat counts
+myrasterDF2$Forest<-0
+myrasterDF2$Forest[myrasterDF2$raster%in%c(1:8)]<-myrasterDF2$count[myrasterDF2$raster%in%c(1:8)]
+myrasterDF2$Open<-0
+myrasterDF2$Open[myrasterDF2$raster%in%c(9:21)]<-myrasterDF2$count[myrasterDF2$raster%in%c(9:21)]
+myrasterDF2$Top<-0
+myrasterDF2$Top[myrasterDF2$raster%in%c(14,17)]<-myrasterDF2$count[myrasterDF2$raster%in%c(14,17)]
+#Heather-rich alpine ridge vegetation, Fresh heather and dwarf-shrub communities
+myrasterDF2$Bottom<-0
+myrasterDF2$Bottom[myrasterDF2$raster%in%c(23:24)]<-myrasterDF2$count[myrasterDF2$raster%in%c(23:24)]
+#Agricultural areas, Cities and built-up areas
+myrasterDF2<-ddply(myrasterDF2,.(grid),summarise,Forest=sum(Forest),Open=sum(Open),Bottom=sum(Bottom),Top=sum(Top))
+
+
+#Simplify into factors
+myrasterDF2$Habitat<-apply(myrasterDF2,1,function(x)ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
+                                                           "Forest","Open"))
+myrasterDF2$Habitat[myrasterDF2$Top>150]<-"Top"
+sum(is.na(myrasterDF2$Habitat))#none!
+
+#Add to the bugs data
+bugs.data$habitat = myrasterDF2$Habitat[match(listlengthDF$grid,myrasterDF2$grid)]
+table(bugs.data$habitat)
+sum(is.na(bugs.data$habitat))
+
+#855
+
+rm(habitatRaster)
+rm(habitatRaster2)
 
 ######################################################################################################
 
-#climate
-setwd("R:/GeoSpatialData/Habitats_biotopes/Europe_EU_DSM_25m")
-Norway_Naturbase??
+#average climatic conditions
+
+#try the EuroLST dataset
+setwd("R:/GeoSpatialData/Meteorology/Europe_EuroLST_bioclim")
+#-BIO1: Annual mean temperature (°C*10): eurolst_clim.bio01.zip (MD5) 72MB
+#-BIO2: Mean diurnal range (Mean monthly (max - min tem)): eurolst_clim.bio02.zip (MD5) 72MB
+#-BIO3: Isothermality ((bio2/bio7)*100): eurolst_clim.bio03.zip (MD5) 72MB
+#-BIO4: Temperature seasonality (standard deviation * 100): eurolst_clim.bio04.zip (MD5) 160MB
+#-BIO5: Maximum temperature of the warmest month (°C*10): eurolst_clim.bio05.zip (MD5) 106MB
+#-BIO6: Minimum temperature of the coldest month (°C*10): eurolst_clim.bio06.zip (MD5) 104MB
+#-BIO7: Temperature annual range (bio5 - bio6) (°C*10): eurolst_clim.bio07.zip (MD5) 132MB
+#-BIO10: Mean temperature of the warmest quarter (°C*10): eurolst_clim.bio10.zip (MD5) 77MB
+#-BIO11: Mean temperature of the coldest quarter (°C*10): eurolst_clim.bio11.zip (MD5) 78MB
+
+######
+#bio1#
+######
+temp_bio1<-raster("eurolst_clim.bio01.tif")
+temp_bio1<-aggregate(temp_bio1,fact=4,fun=mean)
+
+#extract the data
+out<-getEnvironData(temp_bio1,mygrid)
+
+#check data
+hist(out$myraster)
+summary(out$myraster)
+
+#Add to the bugs data
+bugs.data$bio1 = out$myraster[match(listlengthDF$grid,out$grid)]
+summary(bugs.data$bio1)
+plotBUGSData("bio1")
+
+rm(temp_bio1)
+
+##############
+#maximum temp#
+##############
+temp_bio5<-raster("eurolst_clim.bio05.tif")
+temp_bio5<-aggregate(temp_bio5,fact=4,fun=mean)
+out<-getEnvironData(temp_bio5,mygrid)
+bugs.data$bio5 = out$myraster[match(listlengthDF$grid,out$grid)]
+summary(bugs.data$bio5)
+plotBUGSData("bio5")
+rm(temp_bio5)
+
+#minimum temp
+temp_bio6<-raster("eurolst_clim.bio06.tif")
+temp_bio6<-aggregate(temp_bio6,fact=4,fun=mean)
+out<-getEnvironData(temp_bio6,mygrid)
+bugs.data$bio6 = out$myraster[match(listlengthDF$grid,out$grid)]
+summary(bugs.data$bio6)
+plotBUGSData("bio6")
+
+#####################################################################################################
+
+#Examine correlations among bugs variables
+
+varDF<-do.call(cbind,bugs.data[8:13])
+
 
 ######################################################################################################
+
+#basic model
+
+#specify parameters to monitor
+source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
+params <- c("psi.fs","dtype.p","mu.lp")
+
+#need to specify initial values
+library(reshape2)
+zst <- acast(occupancyDF, grid~year, value.var="y",fun=max)
+zst [is.infinite(zst)] <- 0
+inits <- function(){list(z = zst)}
+
+#run model
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta.txt", n.thin=nt,
+             n.chains=3, n.burnin=500,n.iter=10000)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_0.5_BUGS_sparta.RData")
+print(out1,2)
+
+#plot time series of occupancy
+psiSummary<-data.frame(out1$summary[grepl("psi.fs",row.names(out1$summary)),])
+psiSummary$Year <- 2007:2017
+ggplot(psiSummary)+
+  geom_line(aes(x=Year,y=mean))+
+  geom_ribbon(aes(x=Year,ymin=X2.5.,ymax=X97.5.),alpha=0.5)+
+  theme_bw()
+ggsave("ts.png")
+
+#plot occupancy model
+out2<-update(out1,parameters.to.save="z",n.iter=2000)
+zSummary<-data.frame(out2$summary[grepl("z",row.names(out2$summary)),])
+zSummary$ParamNu <- as.character(sub(".*\\[([^][]+)].*", "\\1", row.names(zSummary)))
+zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
+zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
+zSummary$grid<-listlengthDF$grid[match(zSummary$Site,listlengthDF$siteIndex)]
+
+#predicted occupancy across all years
+zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean))
+mygrid[]<-0
+mygrid[zSummary_year$grid]<-zSummary_year$prop
+plot(mygrid)
+plot(Norway,add=T)
+ggsave("occupancyMap_0.5.png")
+
+##########################################################################################
+
+#run model including explanatory variables
+
+#specify parameters to monitor
+source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
+params <- c("psi.fs","dtype.p","mu.lp","beta.access")
+
+#need to specify initial values
+library(reshape2)
+zst <- acast(occupancyDF, grid~year, value.var="y",fun=max)
+zst [is.infinite(zst)] <- 0
+inits <- function(){list(z = zst)}
+
+#run model
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/SpeciesMapServices")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_access.txt", n.thin=nt,
+             n.chains=3, n.burnin=500,n.iter=2000)
+
+print(out1,2)
+
+##########################################################################################
