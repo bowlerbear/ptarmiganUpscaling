@@ -147,6 +147,7 @@ sum(occupancyDF$y)
 bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   nyear = length(unique(listlengthDF$yearIndex)),
                   nvisit = nrow(listlengthDF),
+                  grid = listlengthDF$grid,
                   site = listlengthDF$siteIndex,
                   year = listlengthDF$yearIndex,
                   L = listlengthDF$L - median(listlengthDF$L),
@@ -172,7 +173,7 @@ getEnvironData<-function(myraster,mygridTemp){
   myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
   
   #get general grid
-  grid<-gridTemp
+  mygrid<-gridTemp
   projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
   
   #get mean myraster values per grid cell
@@ -295,20 +296,39 @@ plot(elevation)
 plotBUGSData("elevation")
 
 rm(elevation)
+
 ######################################################################################################
 
 #habitats:
 setwd("R:/GeoSpatialData/LandCover/Norway_Satveg_NORUT/Original/Satveg_deling_nd_partnere_09_12_2009/tiff")
 library(raster)
-habitatRaster<-raster("NNred25-30-t1.tif")#30 x 30 m)
-habitatRaster[habitatRaster>24]<-NA
-habitatRaster[habitatRaster==22]<-NA
-habitatRaster2<-aggregate(habitatRaster,fact=10,fun=modal,na.rm=T)
-plot(habitatRaster2)
+
+#project other rasters onto this
+habitatRasterTop <- raster("NNred25-30-t1.tif")#30 x 30 m
+habitatRasterTop <- aggregate(habitatRasterTop,fact=10,fun=modal,na.rm=T)
+habitatRasterBot <- raster("sn25_geocorr.tif")
+habitatRasterBot <- aggregate(habitatRasterBot,fact=10,fun=modal,na.rm=T)
+extent(habitatRasterTop)
+extent(habitatRasterBot)
+
+#merge each dataset
+totalExtent <- c(246285,1342485,6414184,8014594)
+habitatRasterTop<-extend(habitatRasterTop,extent(totalExtent))
+habitatRasterBot<-extend(habitatRasterBot,extent(totalExtent))
+origin(habitatRasterBot) <-origin(habitatRasterTop)
+habitatRaster <- merge(habitatRasterTop,habitatRasterBot)
+plot(habitatRaster)
+#yeah!!!
+
+#Set NAs for irrelevant habitats
+habitatRaster[habitatRaster>24] <- NA
+habitatRaster[habitatRaster==22] <- NA
+habitatRaster[habitatRaster==0] <- NA
+plot(habitatRaster)
 
 #plot each grid, extract what????
 #crop raster to Norway extent
-myraster<-habitatRaster2
+myraster<-habitatRaster
 rasterCRS<-crs(myraster)
 
 #convert raster into points and convert to lon lat
@@ -326,44 +346,66 @@ projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs
 #get myraster values per grid cell
 mygrid[]<-1:ncell(mygrid)
 variable<-extract(mygrid,myrasterDF)
+mygrid[]<-0
+mygrid[variable]<-1
 myrasterDF<-data.frame(myrasterDF@data)
 myrasterDF$grid<-variable
+
 library(reshape2)
-myrasterDF2<-melt(table(myrasterDF$grid,myrasterDF$myraster))
-names(myrasterDF2)<-c("grid","raster","count")
+myrasterDF<-melt(table(myrasterDF$grid,myrasterDF$myraster))
+names(myrasterDF)<-c("grid","raster","count")
 
 #get rid of 0s
-myrasterDF2<-subset(myrasterDF2,raster!=0)
+myrasterDF<-subset(myrasterDF,raster!=0)
 
 #simplify habitat counts
-myrasterDF2$Forest<-0
-myrasterDF2$Forest[myrasterDF2$raster%in%c(1:8)]<-myrasterDF2$count[myrasterDF2$raster%in%c(1:8)]
-myrasterDF2$Open<-0
-myrasterDF2$Open[myrasterDF2$raster%in%c(9:21)]<-myrasterDF2$count[myrasterDF2$raster%in%c(9:21)]
-myrasterDF2$Top<-0
-myrasterDF2$Top[myrasterDF2$raster%in%c(14,17)]<-myrasterDF2$count[myrasterDF2$raster%in%c(14,17)]
+myrasterDF$Forest<-0
+myrasterDF$Forest[myrasterDF$raster%in%c(1:8)]<-myrasterDF$count[myrasterDF$raster%in%c(1:8)]
+myrasterDF$Open<-0
+myrasterDF$Open[myrasterDF$raster%in%c(9:21)]<-myrasterDF$count[myrasterDF$raster%in%c(9:21)]
+myrasterDF$Top<-0
+myrasterDF$Top[myrasterDF$raster%in%c(14,17)]<-myrasterDF$count[myrasterDF$raster%in%c(14,17)]
 #Heather-rich alpine ridge vegetation, Fresh heather and dwarf-shrub communities
-myrasterDF2$Bottom<-0
-myrasterDF2$Bottom[myrasterDF2$raster%in%c(23:24)]<-myrasterDF2$count[myrasterDF2$raster%in%c(23:24)]
+myrasterDF$Bottom<-0
+myrasterDF$Bottom[myrasterDF$raster%in%c(23:24)]<-myrasterDF$count[myrasterDF$raster%in%c(23:24)]
 #Agricultural areas, Cities and built-up areas
-myrasterDF2<-ddply(myrasterDF2,.(grid),summarise,Forest=sum(Forest),Open=sum(Open),Bottom=sum(Bottom),Top=sum(Top))
+myrasterDF<-ddply(myrasterDF,.(grid),summarise,Forest=sum(Forest),Open=sum(Open),Bottom=sum(Bottom),Top=sum(Top))
 
 
 #Simplify into factors
-myrasterDF2$Habitat<-apply(myrasterDF2,1,function(x)ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
+myrasterDF$Habitat<-apply(myrasterDF,1,function(x)ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
                                                            "Forest","Open"))
-myrasterDF2$Habitat[myrasterDF2$Top>150]<-"Top"
-sum(is.na(myrasterDF2$Habitat))#none!
+myrasterDF$Habitat[myrasterDF$Top>150]<-"Top"
+sum(is.na(myrasterDF$Habitat))#none!
 
 #Add to the bugs data
-bugs.data$habitat = myrasterDF2$Habitat[match(listlengthDF$grid,myrasterDF2$grid)]
+bugs.data$habitat = myrasterDF$Habitat[match(listlengthDF$grid,myrasterDF$grid)]
 table(bugs.data$habitat)
 sum(is.na(bugs.data$habitat))
+#4
 
-#855
+listlengthDF$grid[is.na(bugs.data$habitat)]
+#386...
+subset(listlengthDF,grid==386)
+
+# get coordinates of grid cell 386
+xyFromCell(mygrid,386)
+#         x        y
+#[1,] 11.87806 67.36305
+plot(habitatRaster)
+pts <- data.frame(x=11.87806, y=67.36305)
+coordinates(pts) <- c("x","y")
+proj4string(pts) <- crs("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+pts<-spTransform(pts,crs(projection(habitatRaster)))
+plot(pts,col="red",add=T)#the point is in the sea!!!
+
+#why do we have a point here???
+proj4string(lirype) <- crs("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+pts<-spTransform(lirype,crs(projection(habitatRaster)))
+plot(pts,col="blue",add=T)#the point is in the sea!!!
 
 rm(habitatRaster)
-rm(habitatRaster2)
+rm(myraster)
 
 ######################################################################################################
 
@@ -424,8 +466,52 @@ plotBUGSData("bio6")
 
 #Examine correlations among bugs variables
 
-varDF<-do.call(cbind,bugs.data[8:13])
+varDF<-data.frame(do.call(cbind,bugs.data[9:14]),stringsAsFactors = FALSE)
+varDF[,c(1,2,4,5,6)]<-sapply(varDF[,c(1,2,4,5,6)],as.numeric)
+varDF$habitat<-factor(varDF$habitat,levels=c("Forest","Open","Top"))
 
+library(GGally)
+ggpairs(varDF)
+table(varDF$habitat)
+
+#bio1 and bio6 strongly related
+#bio1 and elevation strongly related
+#access and bio6 are related
+
+#use habitat, bio 1 and bio 5
+
+#which grid cells do we not have information for all these
+varDF$grid<-bugs.data$grid
+NAgrid<-unique(c(varDF$grid[is.na(varDF$habitat)],varDF$grid[is.na(varDF$bio1)],varDF$grid[is.na(varDF$bio5)]))
+NAgrid
+#only 386
+varDF<-subset(varDF,!grid%in%NAgrid)
+
+#####################################################################################################
+
+#remove grid cells for which we dont have all covariates
+#and recreate bugs.data
+
+listlengthDF<-subset(listlengthDF,!grid%in%NAgrid)
+listlengthDF$siteIndex<-as.numeric(factor(listlengthDF$grid))
+listlengthDF$yearIndex<-as.numeric(factor(listlengthDF$YearCollected))
+occupancyDF<-subset(occupancyDF,!grid%in%NAgrid)
+all(occupancyDF$visit==listlengthDF$visit)
+listlengthDF<-merge(listlengthDF,varDF,by="grid",all.x=T)
+all(listlengthDF$grid==varDF$grid)
+listlengthDF<-cbind(listlengthDF,varDF[,-which(names(varDF)=="grid")])
+
+bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
+                  nyear = length(unique(listlengthDF$yearIndex)),
+                  nvisit = nrow(listlengthDF),
+                  grid = listlengthDF$grid,
+                  site = listlengthDF$siteIndex,
+                  year = listlengthDF$yearIndex,
+                  L = listlengthDF$L - median(listlengthDF$L),
+                  y = occupancyDF$y,
+                  habitat = ifelse(listlengthDF$habitat=="Forest",1,0),
+                  bio1 = listlengthDF$bio1,
+                  bio6 = listlengthDF$bio6)
 
 ######################################################################################################
 
@@ -481,7 +567,7 @@ ggsave("occupancyMap_0.5.png")
 
 #specify parameters to monitor
 source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
-params <- c("psi.fs","dtype.p","mu.lp","beta.access")
+params <- c("psi.fs","dtype.p","mu.lp","beta.habitat","beta.bio1","beta.bio6")
 
 #need to specify initial values
 library(reshape2)
@@ -489,11 +575,12 @@ zst <- acast(occupancyDF, grid~year, value.var="y",fun=max)
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
-#run model
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/SpeciesMapServices")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_access.txt", n.thin=nt,
-             n.chains=3, n.burnin=500,n.iter=2000)
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_variables.txt", n.thin=nt,
+             n.chains=3, n.burnin=2000,n.iter=10000)
 
 print(out1,2)
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_variables.RData")
 
 ##########################################################################################
