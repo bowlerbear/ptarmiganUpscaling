@@ -7,11 +7,11 @@ cat("
   for (i in 1:nsite){ 
     for (t in 1:nyear){
       z[i,t] ~ dbern(muZ[i,t]) 
-      logit(muZ[i,t])<- a[t] + eta[i] + habitat[i]*beta.habitat + bio1[i]*beta.bio1 + bio6[i]*beta.bio6
+      logit(muZ[i,t])<- int + a[t] + inprod(beta[],occDM[site[i],])
+      #
       # year as a fixed factor and site as a random factor and environ variables
     }
   }   
-  
   
   ### Observation Model
   for(j in 1:nvisit) {
@@ -23,6 +23,11 @@ cat("
     #depends on year and list length
     } 
   
+  #model for missing covariates in detection
+  
+
+
+
   # Derived parameters
   for (t in 1:nyear) {  
     psi.fs[t] <- sum(z[1:nsite, t])/nsite
@@ -31,13 +36,11 @@ cat("
   #Priors 
 
   # State model priors
-    #year effects
-    #year 1
-    a[1] ~ dnorm(0, 0.001)
-
-    #other years
-    for(t in 2:nyear){
-      a[t] ~ dnorm(a[t-1], tau.a)
+    int ~ dnorm(0,0.001)
+ 
+    #years
+    for(t in 1:nyear){
+      a[t] ~ dnorm(0, tau.a)
     }
     tau.a <- 1/(sd.a * sd.a)
     sd.a ~ dt(0, 1, 1)T(0,) 
@@ -49,7 +52,6 @@ cat("
     tau2 <- 1/(sigma2 * sigma2) 
     sigma2 ~ dt(0, 1, 1)T(0,) 
 
-
     #Observation model priors 
     #year effects
     for (t in 1:nyear) {
@@ -60,10 +62,9 @@ cat("
     tau.lp <- 1 / (sd.lp * sd.lp)                 
     sd.lp ~ dt(0, 1, 1)T(0,)  
     
-    #ecological covariates
-    beta.habitat ~ dnorm(0,0.01)
-    beta.bio1 ~ dnorm(0,0.01)
-    beta.bio6 ~ dnorm(0,0.01)
+    for(i in 1:n.covs){
+      beta[i] ~ dnorm(0,0.1)
+    }
 
     #observation model covariates
     dtype.p ~ dnorm(0, 0.01)
