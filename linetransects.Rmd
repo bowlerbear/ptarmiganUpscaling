@@ -1,0 +1,186 @@
+---
+title: "combined_model_covariates"
+author: "Diana Bowler"
+date: "14 november 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+Import the data - check the subsetting is as wanted
+
+```{r}
+library(knitr)
+#knit("ptarmigan_formatting.Rmd")
+load("/data/home/diana.bowler/NorskPtarmigan/allData.RData")
+head(allData)
+
+```
+
+Plot the data:
+
+```{r results='asis'}
+
+qplot(Year,totalIndiv,data=allData,facets=~Fylkesnavn)
+
+```
+
+
+Get population data
+
+```{r, warning=FALSE}
+library(magrittr)
+library(plyr); library(dplyr)
+library(ggplot2)
+
+#subset
+allData<-subset(allData,Year>2006)
+
+#remove hyphens for help with subsetting
+allData$Fylkesnavn<-gsub("-"," ",allData$Fylkesnavn)
+allData$Rapporteringsniva<-gsub("-"," ",allData$Rapporteringsniva)
+
+#change kommune name for Dovre Fjellstyre
+allData$Kommunenavn[which(allData$Kommunenavn=="Dovre Fjellstyrene")]<-"Dovre"
+
+#Nordland__Indre Troms             
+#Troms__Indre Troms 
+allData$Fylkesnavn[which(allData$Rapporteringsniva=="Indre Troms")]<-"Troms"
+
+#get number of individuals per line
+nuIndivs <-
+  allData%>%
+  group_by(Year,LinjeID,Fylkesnavn,Kommunenavn,OmradeNavn,OmradeID,Rapporteringsniva, add = T) %>%
+  summarise(nuAdults = sum(Adults), 
+            nuJuvs = sum(AntallKylling),
+            nuTotal = sum(totalIndiv),
+            maxTransectLength=max(LengdeTaksert,na.rm=T))
+nuIndivs$iYear <- nuIndivs$Year - min(nuIndivs$Year) + 1
+summary(nuIndivs)
+
+#reshape the line data into an array
+library(reshape2)
+nuIndivs$Line<-paste(nuIndivs$Fylkesnavn,nuIndivs$Rapporteringsniva,sep="_")
+nuIndivs$Line<-paste(nuIndivs$Line,nuIndivs$OmradeID,sep="#")
+nuIndivs$Line<-paste(nuIndivs$Line,nuIndivs$LinjeID,sep="-")
+my.n <- acast(nuIndivs,Line~Year,value.var="nuTotal")
+
+#check all have at least one positive and non-zero value
+summary(as.numeric(apply(my.n,1,max,na.rm=T)))#yes!!
+
+#get transect length data
+allData$Line<-paste(allData$Fylkesnavn,allData$Rapporteringsniva,sep="_")
+allData$Line<-paste(allData$Line,allData$OmradeID,sep="#")
+allData$Line<-paste(allData$Line,allData$LinjeID,sep="-")
+transectLengths <- acast(allData,Line~Year,value.var="LengdeTaksert",fun=max,na.rm=T)
+transectLengths[is.na(my.n)]<-0
+#there are some -1 transect lengths
+#transectLengths[transectLengths==-1]<-0
+#Finnmark_Indre Finnmark-882/3
+my.n[transectLengths==0]<-NA
+
+#order site info
+siteInfo<-data.frame(Line=row.names(my.n))
+siteInfo$Fylkesnavn<-as.numeric(factor(sapply(siteInfo$Line,function(x)strsplit(as.character(x),"_")[[1]][1])))
+siteInfo$Rapporteringsniva<-as.numeric(factor(sapply(siteInfo$Line,function(x)strsplit(as.character(x),"#")[[1]][1])))
+siteInfo$LinjeID<-as.numeric(factor(siteInfo$Line))
+siteInfo$originalLinjeID<-sapply(siteInfo$Line,function(x)strsplit(as.character(x),"#")[[1]][2])
+siteInfo$originalLinjeID<-sapply(siteInfo$originalLinjeID,function(x)strsplit(as.character(x),"-")[[1]][2])
+siteInfo$Kommunenavn<-nuIndivs$Kommunenavn[match(siteInfo$originalLinjeID,nuIndivs$LinjeID)]
+
+#Create a data frame with only detection
+allDetections<-subset(allData,totalIndiv>0&!is.na(totalIndiv))
+#get indices of sites
+allDetections<-merge(allDetections[,-c(2:7)],siteInfo,by="Line",all.x=T,sort=FALSE)
+allDetections$detectionLineYear<-
+  as.numeric(factor(interaction(allDetections$LinjeID,allDetections$Year)))
+allDetections$detectionSiteYear<-
+  as.numeric(factor(interaction(allDetections$Rapporteringsniva,allDetections$Year)))
+
+head(allDetections)
+
+#Organise fur bugs
+bugs.data <- list(#For the state model
+                  n.Lines = length(unique(nuIndivs$LinjeID)),
+                  n.Years = length(unique(nuIndivs$Year)),
+                  n.Sites = length(unique(nuIndivs$Fylkesnavn)),
+                  n.Sites2 = length(unique(interaction(nuIndivs$Rapporteringsniva,nuIndivs$Fylkesnavn))),
+                  line = siteInfo$LinjeID,
+                  site = siteInfo$Fylkesnavn,
+                  site2 = siteInfo$Rapporteringsniva, 
+                  year = (1:length(unique(nuIndivs$Year))),
+                  NuIndivs = my.n,
+                  TransectLength = transectLengths,#check again
+                  #For the distance model
+                  W = 200,
+                  N = nrow(allDetections),
+                  y = allDetections$LinjeAvstand,
+                  detectionGroupSize = log(allDetections$totalIndiv+1),
+                  GroupSize = allDetections$totalIndiv,
+                  zeros.dist = rep(0,nrow(allDetections)),
+                  detectionLine = allDetections$LinjeID,
+                  detectionYear = as.numeric(as.factor(allDetections$Year)),
+                  detectionSite = allDetections$Rapporteringsniva,
+                  detectionSiteYear = allDetections$detectionSiteYear)
+
+#mistake with 1405 - transect length
+#highlight all those line with different transect lengths
+tl<-ddply(allData,.(LinjeID),summarise,nu=length(unique(LengdeTaksert)),maxtl=max(LengdeTaksert,na.rm=T),mintl=min(LengdeTaksert,na.rm=T))
+tl<-subset(tl,nu>1)
+tl$diff<-tl$maxtl-tl$mintl
+tl<-tl[order(tl$diff,decreasing=T),]
+
+#add lengths
+bugs.data$n.LineYear<-length(unique(bugs.data$detectionLineYear))
+bugs.data$n.SiteYear<-length(unique(bugs.data$detectionSiteYear))
+
+#year one priors
+bugs.data$year1<-as.numeric(apply(my.n,1,function(x)ifelse(!is.na(x[1]),x[1],max(x,na.rm=T))))
+bugs.data$year1[bugs.data$year1==0]<-1
+
+names(bugs.data)
+
+#specify Fylke in order of latitude
+FylkeOrder<-c("Finnmark","Troms","Nordland","Nord Trøndelag","Sør Trøndelag","Hedmark",
+              "Oppland","Buskerud","Hordaland","Vest Agder")
+
+```
+
+Example model checking
+
+```{r}
+
+library(coda)
+bayes.mod.fit.mcmc <- as.mcmc(out1)
+summary(bayes.mod.fit.mcmc)
+xyplot(bayes.mod.fit.mcmc)
+xyplot(bayes.mod.fit.mcmc, layout=c(2,2), aspect="fill")
+densityplot(bayes.mod.fit.mcmc)
+gelman.plot(bayes.mod.fit.mcmc)
+
+library(mcmcplots)
+denplot(bayes.mod.fit.mcmc)
+
+library(ggmcmc)
+bayes.mod.fit.gg <- ggs(bayes.mod.fit.mcmc)
+ggs_density(bayes.mod.fit.gg)
+ggmcmc(bayes.mod.fit.gg, file = "~/Documents/Uni/Teaching/CPH-Bayes/Tutorials/JAGS and R/bayes_fit_ggmcmc.pdf")
+
+#sample the relationships (intercept and slopes) from the pdd and plot them
+
+```
+
+#multiply the effect size by exposure
+
+```{r}
+
+#model the relationship between sd and mean climatic
+
+
+```
+
+
