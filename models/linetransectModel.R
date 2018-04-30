@@ -155,11 +155,11 @@ cat("
       #linear predictor on density
         log(Density[j,t]) <- int.d + 
                             random.d.line[j] + 
-                            random.d.site[j] +
-                            random.d.site2[j] +
+                            random.d.site[site[j]] +
+                            random.d.site2[site2[j]] +
                             random.d.year[t] +
-                            random.d.syear[j,t] +
-                            random.d.s2year[j,t] 
+                            random.d.syear[site[j],t] +
+                            random.d.s2year[site2[j],t] 
 
     }}
 

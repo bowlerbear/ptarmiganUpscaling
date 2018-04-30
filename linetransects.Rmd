@@ -1,5 +1,5 @@
 ---
-title: "combined_model_covariates"
+title: "linetransects"
 author: "Diana Bowler"
 date: "14 november 2017"
 output: html_document
@@ -15,17 +15,8 @@ Import the data - check the subsetting is as wanted
 
 ```{r}
 library(knitr)
-#knit("ptarmigan_formatting.Rmd")
-load("/data/home/diana.bowler/NorskPtarmigan/allData.RData")
+load("allData.RData")
 head(allData)
-
-```
-
-Plot the data:
-
-```{r results='asis'}
-
-qplot(Year,totalIndiv,data=allData,facets=~Fylkesnavn)
 
 ```
 
@@ -144,43 +135,299 @@ bugs.data$year1[bugs.data$year1==0]<-1
 
 names(bugs.data)
 
-#specify Fylke in order of latitude
-FylkeOrder<-c("Finnmark","Troms","Nordland","Nord Trøndelag","Sør Trøndelag","Hedmark",
-              "Oppland","Buskerud","Hordaland","Vest Agder")
-
 ```
 
-Example model checking
+Run model in JAGS 
 
 ```{r}
 
-library(coda)
-bayes.mod.fit.mcmc <- as.mcmc(out1)
-summary(bayes.mod.fit.mcmc)
-xyplot(bayes.mod.fit.mcmc)
-xyplot(bayes.mod.fit.mcmc, layout=c(2,2), aspect="fill")
-densityplot(bayes.mod.fit.mcmc)
-gelman.plot(bayes.mod.fit.mcmc)
+source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
+params <- c("int","line.d.sd","year.d.sd","Density")
 
-library(mcmcplots)
-denplot(bayes.mod.fit.mcmc)
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel.txt", n.thin=nt,
+               n.chains=3, n.burnin=200,n.iter=1000,parallel=T)
 
-library(ggmcmc)
-bayes.mod.fit.gg <- ggs(bayes.mod.fit.mcmc)
-ggs_density(bayes.mod.fit.gg)
-ggmcmc(bayes.mod.fit.gg, file = "~/Documents/Uni/Teaching/CPH-Bayes/Tutorials/JAGS and R/bayes_fit_ggmcmc.pdf")
-
-#sample the relationships (intercept and slopes) from the pdd and plot them
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_linetransectModel.RData")
+traceplot(out1)
 
 ```
 
-#multiply the effect size by exposure
+Get model fits
 
 ```{r}
 
-#model the relationship between sd and mean climatic
+source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
+load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs/out1_linetransectModel.RData")
+load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/siteInfo.RData")
 
+fits<-getBUGSFits(out1)
+#get average values per year
+fits<-ddply(fits,.(Line,Fylkesnavn,Rapporteringsniva,originalLinjeID),summarise,mean=mean(mean))
 
 ```
 
+Plot predictions based on transect coordinates
+
+make lines spatial
+
+```{r}
+
+load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/Temp_2_linetransect_coords.RData")
+
+Temp_2<-subset(Temp_2,LinjeID%in%unique(allData$LinjeID))
+
+library(sp)
+library(rgeos)
+
+LongLat = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
+
+for (i in seq(nrow(Temp_2))) {
+  if (i == 1) {
+    spTemp = readWKT(Temp_2$STAsText[i], Temp_2$LinjeID[i], p4s=LongLat)
+    
+  }
+  else {
+    spTemp = rbind(
+      spTemp, readWKT(Temp_2$STAsText[i], Temp_2$LinjeID[i], p4s=LongLat)
+      
+    )
+  }
+}
+
+#Make Lines spatial data frame
+mydata <- Temp_2[,c("LinjeID","Fylkesnavn","Region","Rapporteringsniva","OmradeID", "OmradeNavn")]
+rownames(mydata) <- paste(mydata$LinjeID)
+Lines_spatial <- SpatialLinesDataFrame(spTemp, mydata, match.ID=T)
+plot(Lines_spatial)
+
+library(sp)
+library(ggplot2)
+
+mySLDF_fortify<-fortify(Lines_spatial)
+mySLDF_fortify$fits<-fits$mean[match(mySLDF_fortify$id,fits$originalLinjeID)]
+ggplot(mySLDF_fortify, aes(x=long, y=lat, group=group)) + 
+  geom_path(aes(colour=log(fits)),size=rel(4),alpha=0.5) +
+  scale_colour_gradient(low="red",high="steelblue")+
+  theme_classic()
+
+```
+
+#Aline transects with the grid
+
+for this we use birds with point observations
+
+(1) First do quality check on the points
+
+```{r}
+
+#get all observations
+allDataObs<-subset(allData,!is.na(totalIndiv))
+allDataObs<-subset(allDataObs,totalIndiv!=0)
+
+#Remove obs without coords
+allDataObs<-subset(allDataObs,!is.na(Latitude))
+allDataObs<-subset(allDataObs,Latitude!=0)
+summary(allDataObs$Latitude)
+summary(allDataObs$Longitude)
+ 
+#Remove obs whose coords differ from predicted coords
+allDataObs$diff<-abs(allDataObs$LinjeAvstand-allDataObs$N_dist)
+hist(allDataObs$diff)
+summary(allDataObs$diff)
+allDataObs<-subset(allDataObs,diff<=500)
+
+#make into a spatial object
+coordinates(allDataObs)<-c("Longitude","Latitude")
+plot(allDataObs)
+
+```
+
+(2) Assign points to the grid
+
+```{r}
+
+#get Norway
+library(raster)
+library(maptools)
+data(wrld_simpl)
+Norway<- subset(wrld_simpl,NAME=="Norway")
+plot(Norway)
+
+#create grid
+newres=0.5
+mygrid<-raster(extent(Norway))
+res(mygrid)<-newres
+mygrid[]<-1:ncell(mygrid)
+plot(mygrid)
+gridTemp<-mygrid
+
+#get presences
+allDataObs$cells<-extract(mygrid,allDataObs)
+
+#Get number of groups seen per grid
+library(reshape2)
+groupInfo <- acast(allDataObs@data,cells~Year,value.var="totalIndiv",fun=length)
+
+#Get total individuals seen per grid
+totalsInfo<-acast(allDataObs@data,cells~Year,value.var="totalIndiv",fun=sum)
+
+#get average group size per grid
+groupSizes<-acast(allDataObs@data,cells~Year,value.var="totalIndiv",fun=mean)
+groupSizes[is.na(groupSizes)]<-NA
+
+```
+
+(3) Work about how much each grid was covered by a line transect
+
+```{r}
+
+library(rgeos)
+projection(mygrid)<-crs(Lines_spatial)#they are both in lon lat
+rsp <- rasterToPolygons(mygrid)
+#convert into m grid
+rsp <-spTransform(rsp,CRS("+proj=eck4 +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
+Lines_spatial <-spTransform(Lines_spatial,CRS("+proj=eck4 +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
+rp <- raster::intersect(Lines_spatial,rsp)
+rp$length <- gLength(rp, byid=TRUE) 
+mapping<-rp
+rp<-ddply(rp@data,.(layer),summarise,length=sum(length))
+
+mygrid[]<-0
+mygrid[rp$layer]<-rp$length
+plot(mygrid)
+
+#turn into an array
+transectLengths<-expand.grid(grid=rp$layer,year=2007:2017)
+transectLengths$length<-rp$length[match(transectLengths$grid,rp$layer)]
+transectLengths<-acast(transectLengths,grid~year,value.var="length")
+
+```
+
+(4) Insert NAs into the datasheet
+
+```{r}
+
+head(allData)
+
+#map line transect to grid cell
+allData<-merge(allData,mapping[,c("LinjeID","layer")],by="LinjeID",all=T)
+allData$layer[allData$ObservasjonId%in%allDataObs$ObservasjonId]<-allDataObs$cells[match(allData$ObservasjonId[allData$ObservasjonId%in%allDataObs$ObservasjonId],allDataObs$ObservasjonId)]
+NAs<-acast(allData,layer~Year,value.var="totalIndiv",fun=sum)
+
+#nothing was seen in all cells 
+row.names(NAs)[!row.names(NAs)%in%row.names(groupInfo)]
+row.names(groupInfo)[!row.names(groupInfo)%in%row.names(NAs)]
+# "101" "701" 
+#In "757" there was!!!! but observations were deleted by quality check
+row.names(transectLengths)[!row.names(transectLengths)%in%row.names(groupInfo)]
+row.names(groupInfo)[!row.names(groupInfo)%in%row.names(transectLengths)]#702 too
+removeGrids<-c("101","701","757","702")
+
+#anyhow drop these cells!
+NAs<-subset(NAs,!row.names(NAs)%in%removeGrids)
+groupInfo<-subset(groupInfo,!row.names(groupInfo)%in%removeGrids)
+totalsInfo<-subset(totalsInfo,!row.names(totalsInfo)%in%removeGrids)
+groupSizes<-subset(groupSizes,!row.names(groupSizes)%in%removeGrids)
+transectLengths<-subset(transectLengths,!row.names(transectLengths)%in%removeGrids)
+allData<-subset(allData,!layer%in%removeGrids)
+allDetections<-subset(allDataObs,!cells%in%removeGrids)
+allDetections$detectionLineYear<-
+  as.numeric(factor(interaction(allDetections$LinjeID,allDetections$Year)))
+allDetections$detectionSiteYear<-
+  as.numeric(factor(interaction(allDetections$Rapporteringsniva,allDetections$Year)))
+
+#check data frames now match
+all(row.names(groupInfo)==row.names(NAs))
+all(row.names(groupInfo)==row.names(transectLengths))
+all(row.names(groupSizes)==row.names(transectLengths))
+
+#now insert NAs
+transectLengths[is.na(NAs)]<-0
+groupSizes[is.na(NAs)]<-NA
+totalsInfo[is.na(NAs)]<-NA
+groupInfo[is.na(NAs)]<-NA
+
+```
+
+
+(5) Reorganise data at the grid level
+
+```{r}
+
+allData$cellID<-as.numeric(as.factor(allData$layer))
+allDetections$cellID<-allData$cellID[match(allDetections$LinjeID,allData$LinjeID)]
+siteInfo<-unique(allData[,c("cellID","layer","Fylkesnavn","Rapporteringsniva")])
+siteInfo<-siteInfo[order(siteInfo$cellID),]
+siteInfo<-subset(siteInfo,!duplicated(siteInfo$cellID))#temporary measure - should not be here for smaller grid sizes
+row.names(groupInfo)<-siteInfo$cellID[match(row.names(groupInfo),siteInfo$layer)]
+row.names(transectLengths)<-siteInfo$cellID[match(row.names(transectLengths),siteInfo$layer)]
+
+bugs.data <- list(#For the state model
+                  n.Lines = length(unique(allData$cellID)),
+                  n.Years = length(unique(allData$Year)),
+                  n.Sites = length(unique(allData$Fylkesnavn)),
+                  n.Sites2 = length(unique(interaction(allData$Rapporteringsniva,allData$Fylkesnavn))),
+                  line = siteInfo$cellID,
+                  site = as.numeric(as.factor(siteInfo$Fylkesnavn)),
+                  site2 = as.numeric(as.factor(siteInfo$Rapporteringsniva)), 
+                  year = (1:length(unique(allData$Year))),
+                  NuIndivs = groupInfo,
+                  TransectLength = transectLengths,
+                  #For the distance model
+                  W = 200,
+                  N = nrow(allDetections),
+                  y = allDetections$LinjeAvstand,
+                  detectionGroupSize = log(allDetections$totalIndiv+1),
+                  GroupSize = allDetections$totalIndiv,
+                  zeros.dist = rep(0,nrow(allDetections)),
+                  detectionLine = allDetections$cellID,
+                  detectionYear = as.numeric(as.factor(allDetections$Year)),
+                  detectionSite = as.numeric(as.factor(allDetections$Rapporteringsniva)),
+                  detectionSiteYear = allDetections$detectionSiteYear)
+
+#add lengths
+bugs.data$n.LineYear<-length(unique(bugs.data$detectionLineYear))
+bugs.data$n.SiteYear<-length(unique(bugs.data$detectionSiteYear))
+
+names(bugs.data)
+
+```
+
+(6) Run new model at the grid level
+
+```{r}
+
+source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
+params <- c("int","line.d.sd","year.d.sd","Density")
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel.txt", n.thin=nt,
+               n.chains=3, n.burnin=1000,n.iter=5000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_linetransectModel_Gridded.RData")
+traceplot(out1)
+
+```
+
+Look at fits
+
+```{r}
+load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs/out1_linetransectModel_Gridded.RData")
+fits<-getBUGSFits(out1)
+mygrid[]<-0
+mygrid[fits$layer]<-fits$mean
+plot(mygrid)
+
+```
+
+Now get the environmental information for these cells
+
+```{r}
+
+
+
+```
 
