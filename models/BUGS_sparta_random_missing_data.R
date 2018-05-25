@@ -1,14 +1,13 @@
 cat("
   model{
-  # JAGS code for SPARTA model plus random walk prior
-  # on the year effect of the state model + intercept + halfcauchy hyperpriors
+  # JAGS code for SPARTA model 
+  # on the year effect of the state model + intercept 
   
   # State model
   for (i in 1:nsite){ 
     for (t in 1:nyear){
       z[i,t] ~ dbern(muZ[i,t]) 
-      logit(muZ[i,t])<- int + a[t] + inprod(beta[],occDM[site[i],])
-      #
+      logit(muZ[i,t]) <- a[t] + random.adm[adm[i]]
       # year as a fixed factor and site as a random factor and environ variables
     }
   }   
@@ -19,10 +18,17 @@ cat("
     Py[j]<- z[site[j],year[j]]*p[j] #probability to detect = prob of occ * prob of detection
 
     #detection model:
-    logit(p[j]) <-  alpha.p[year[j]] + dtype.p*L[j] 
-    #depends on year and list length
-    } 
-  
+    logit(p[j]) <-  alpha.p[year[j]] 
+    #+ dtype.p*L[j]
+    # depends on year and list length - intercept is 0
+  } 
+
+  #model for missing list length data
+  for(j in 1:nvisit){
+    L[j] ~ dpois(muL[j])
+    muL[j] <- intL 
+  }
+  intL ~ dunif(0,100)  
 
   # Derived parameters
   for (t in 1:nyear) {  
@@ -32,11 +38,13 @@ cat("
   #Priors 
 
   # State model priors
-    int ~ dnorm(0,0.001)
- 
-    #years
-    for(t in 1:nyear){
-      a[t] ~ dnorm(0, tau.a)
+    #year effects
+    #year 1
+    a[1] ~ dnorm(0, 0.001)
+    
+    #other years
+    for(t in 2:nyear){
+    a[t] ~ dnorm(a[t-1], tau.a)
     }
     tau.a <- 1/(sd.a * sd.a)
     sd.a ~ dt(0, 1, 1)T(0,) 
@@ -48,6 +56,13 @@ cat("
     tau2 <- 1/(sigma2 * sigma2) 
     sigma2 ~ dt(0, 1, 1)T(0,) 
 
+    #adm effects
+    for(i in 1:n.adm){
+      random.adm[i] ~ dnorm(0,random.adm.tau)
+    }
+    random.adm.tau <- pow(random.adm.sd,-2)
+    random.adm.sd ~ dunif(0,10)
+    
     #Observation model priors 
     #year effects
     for (t in 1:nyear) {
@@ -56,12 +71,8 @@ cat("
     tau.lp <- 1 / (sd.lp * sd.lp)                 
     sd.lp ~ dt(0, 1, 1)T(0,)  
     
-    for(i in 1:n.covs){
-      beta[i] ~ dnorm(0,0.1)
-    }
-
     #observation model covariates
     dtype.p ~ dnorm(0, 0.01)
 
   }
-    ",fill=TRUE,file="BUGS_sparta_variables_missing.txt")
+    ",fill=TRUE,file="BUGS_sparta_random_missing.txt")
