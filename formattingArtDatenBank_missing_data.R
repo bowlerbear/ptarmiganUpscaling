@@ -122,6 +122,9 @@ nobirds_data <- data.frame(YearCollected=NA,
                            grid=mygridMaskDF$layer[!mygridMaskDF$layer%in%allbirds_data$grid],#268 grids
                            Species=NA)
 
+#for the moment, just insert a dummy year - 2007
+nobirds_data$YearCollected <- 2017
+
 all_data <- rbind(allbirds_data,nobirds_data)
 all_data <- subset(all_data,!is.na(grid))
 
@@ -213,6 +216,7 @@ plotZ<-function(model){
   #predicted occupancy across all years
   zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean))
   #plot mean prop occupancy
+  par(mfrow=c(1,1))
   mygrid[]<-0
   mygrid[zSummary_year$grid]<-zSummary_year$prop
   plot(mygrid)
@@ -499,9 +503,11 @@ alpineData<-subset(alpineData,!grid%in%NAgrid)
 varDF<-merge(varDF,alpineData,by="grid",all.x=T,sort=FALSE)
 summary(varDF)
 length(unique(varDF$grid))#375
+save(varDF,file="varDF_allEnvironData.RData")
 
 ######################################################################################################
 
+load("varDF_allEnvironData.RData")
 #remove grid cells for which we dont have all covariates
 #and recreate bugs.data
 
@@ -560,8 +566,9 @@ source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
 #run model including explanatory variables
 
 #specify model structure
-bugs.data$occDM <- model.matrix(~ scale(bugs.data$tree_line_position)+
-                                  scale(bugs.data$bio5)+
+bugs.data$occDM <- model.matrix(~ scale(bugs.data$bio5)+
+                                  scale(bugs.data$forest)+
+                                  scale(bugs.data$alpine_habitat1)+
                                   scale(bugs.data$alpine_habitat3))[,-1]
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
@@ -569,12 +576,12 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 params <- c("int","psi.fs","dtype.p","mu.lp","beta","a")
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_variables.txt", n.thin=nt,
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_variables_missing.txt", n.thin=nt,
              n.chains=3, n.burnin=10000,n.iter=50000)
 
 print(out1,2)
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_variables.RData")
+save(out1,file="out1_OM_variables_missing.RData")
 
 colnames(bugs.data$occDM)
 
@@ -588,16 +595,9 @@ plotZ(out2)
 
 plotZerror(out2)
 
-
-##########################################################################################
-
-#project to areas unsurveyed on the basis of environmental covariates alone???
-
-
-
 ##########################################################################################
  
-#using jagam
+#also using jagam
 
 #add to the dataset, the coordinates of the grid
 gridDF<-as.data.frame(gridTemp,xy=T)
