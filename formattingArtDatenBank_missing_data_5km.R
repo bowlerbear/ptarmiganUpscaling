@@ -109,17 +109,7 @@ allbirds@data$Species<-apply(allbirds@data,1,function(x)paste(x["Genus"],x["Spec
 allbirds_data<-data.frame(allbirds@data,allbirds@coords) 
 allbirds_data <- allbirds_data[,c("YearCollected","MonthCollected","DayCollected","grid","Species")]
 allbirds_data <- subset(allbirds_data,DayCollected!=0)
-
-#unsurveyed grids
-nobirds_data <- expand.grid(YearCollected=2017,
-                           grid=mygridMaskDF$layer[!mygridMaskDF$layer%in%allbirds_data$grid],#268 grids
-                           MonthCollected=NA,
-                           DayCollected=NA,
-                           Species=NA)
-
-#combine them
-all_data <- rbind(allbirds_data,nobirds_data)
-all_data <- subset(all_data,!is.na(grid))
+all_data <- subset(allbirds_data,!is.na(grid))
 
 #########################################################################
 
@@ -142,7 +132,7 @@ plot(mygrid)#looks good!
 
 #########################################################################
 
-#Run occupancy model for willow ptarmigan - using the sparta base code
+#get list length info
 
 #get total number of species ever seen per grid
 gridRichness <- ddply(all_data,.(grid),summarise,nuSpecies=length(unique(Species[!is.na(Species)])),nuRecs=length(Species[!is.na(Species)]))
@@ -169,18 +159,21 @@ listlengthDF$y<-sapply(listlengthDF$visit,function(x)ifelse(x%in%lirype$visit,1,
 sum(listlengthDF$y,na.rm=T)
 #10927
 
-#add NAs for all years
-newgrid<-expand.grid(YearCollected=unique(listlengthDF$YearCollected),grid=unique(listlengthDF$grid))
-listlengthDF<-merge(listlengthDF,newgrid,by=c("YearCollected","grid"),all=T)
+############################################################################
 
-#add NAs for 2017
-#newgrid<-expand.grid(YearCollected=2017,grid=unique(listlengthDF$grid))
-#listlengthDF<-merge(listlengthDF,newgrid,by=c("YearCollected","grid"),all=T)
+#add NAs for all years and grids
+newgrid<-expand.grid(YearCollected=unique(listlengthDF$YearCollected),
+                     grid=sort(unique(mygridMaskDF$layer)))
+listlengthDF<-merge(listlengthDF,newgrid,by=c("YearCollected","grid"),all=T)
+summary(listlengthDF)
+table(listlengthDF$grid,listlengthDF$YearCollected)
 
 #########################################
+#adding non-detections??
 #listlengthDF$L[is.na(listlengthDF$L)]<-0
 #listlengthDF$y[listlengthDF$L==0]<-0
 #########################################
+#######################################################################
 
 #hist(listlengthDF$L)
 summary(listlengthDF$L)
@@ -190,8 +183,10 @@ listlengthDF$L[listlengthDF$L>quantile(listlengthDF$L,0.975,na.rm=T)]<-quantile(
 
 #other measures
 #table(listlengthDF$L3)
-#hist(listlengthDF$L3)
+hist(listlengthDF$L3)
 #hist(log(listlengthDF$L3+1))
+listlengthDF$L2[listlengthDF$L2>quantile(listlengthDF$L2,0.975,na.rm=T)]<-quantile(listlengthDF$L2,0.975,na.rm=T)
+listlengthDF$L3[listlengthDF$L3>quantile(listlengthDF$L3,0.975,na.rm=T)]<-quantile(listlengthDF$L3,0.975,na.rm=T)
 
 #add species richnes for each grid
 listlengthDF$nuSpecies <- gridRichness$nuSpecies[match(listlengthDF$grid,gridRichness$grid)]
@@ -208,6 +203,10 @@ listlengthDF$yearIndex<-as.numeric(as.factor(listlengthDF$YearCollected))
 listlengthDF$adm<-myAdm$VARNAME_1[match(listlengthDF$grid,myAdm$grid)]
 table(listlengthDF$adm)
 listlengthDF$adm2<-as.numeric(as.factor(listlengthDF$adm))
+
+#############################################################################
+
+#for environmental data
 
 bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   nyear = length(unique(listlengthDF$yearIndex)),
@@ -274,14 +273,14 @@ plotZ<-function(model,param="z"){
   zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
   zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
   zSummary$grid<-listlengthDF$grid[match(zSummary$Site,listlengthDF$siteIndex)]
-  zSummary_year<-subset(zSummary,Year==11)
+  #zSummary_year<-subset(zSummary,Year==11)
   
   #predicted occupancy across all years
-  #zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean))
+  zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean))
   #plot mean prop occupancy
   par(mfrow=c(1,1))
   mygrid[]<-0
-  mygrid[zSummary_year$grid]<-zSummary_year$mean
+  mygrid[zSummary_year$grid]<-zSummary_year$prop
   plot(mygrid)
   plot(Norway,add=T)
 }
@@ -309,6 +308,14 @@ plotZerror<-function(model){
   plot(Norway,add=T)
 }
 
+getParam<-function(model,param="z"){
+  zSummary<-data.frame(model$summary[grepl(param,row.names(model$summary)),])
+  zSummary$ParamNu <- as.character(sub(".*\\[([^][]+)].*", "\\1", row.names(zSummary)))
+  zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
+  zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
+  return(zSummary)
+  }
+  
 #######################################################################
 
 #Code to get environmental data:
@@ -601,27 +608,38 @@ save(varDF,file="varDF_allEnvironData_5km.RData")
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling")
 load("varDF_allEnvironData_5km.RData")
 varDF<-subset(varDF,!duplicated(grid))
-listlengthDF<-merge(listlengthDF,varDF,by="grid")
+listlengthDF<-merge(listlengthDF,varDF,by="grid",sort=F)
 
 #add indices
-listlengthDF$site<-paste(listlengthDF$adm2,listlengthDF$grid,sep="-")
-listlengthDF$siteIndex<-as.numeric(factor(listlengthDF$site))
+#listlengthDF$site<-paste(listlengthDF$adm2,listlengthDF$grid,sep="-")
+listlengthDF$siteIndex<-as.numeric(factor(listlengthDF$grid))
 listlengthDF$yearIndex<-as.numeric(factor(listlengthDF$YearCollected))
 
 #order data by site and year
-listlengthDF<-arrange(listlengthDF,yearIndex,adm2,siteIndex)
+listlengthDF<-arrange(listlengthDF,yearIndex,siteIndex)
 
 #extract site data
 listlengthDF_SiteCovs<-subset(listlengthDF,!duplicated(grid))
+
+#adm data
+siteInfo<-unique(listlengthDF[,c("siteIndex","adm2","grid")])
 
 ####################################################################################################
 
 #fit as glm with explanatory variables
 
+#add to the dataset, the coordinates of the grid
+gridDF<-as.data.frame(gridTemp,xy=T)
+varDF<-merge(varDF,gridDF,by.x="grid",by.y="layer",all.x=T)
+
+#get y
 occupancyGrid<-ddply(listlengthDF,.(grid),summarise,species=max(y,na.rm=T))
 varDF<-merge(varDF,occupancyGrid,by="grid",all.x=T)
 varDF$species[is.infinite(varDF$species)]<-NA
+
+#remove nonsurvyed data
 varDF2<-subset(varDF,!is.na(species))
+mean(varDF2$species)#0.3908126
 
 summary(glm(species~alpine_habitat2,data=varDF2))
 summary(glm(species~bio1,data=varDF2))
@@ -633,8 +651,9 @@ summary(glm(species~Top,data=varDF2))
 summary(glm(species~bio1 + Open + tree_line_position + I(tree_line_position^2),data=varDF))
 #all significant...
 glm1<-glm(species~bio1 + Open + tree_line_position + I(tree_line_position^2),data=varDF2)
-varDF2$fits<-predict(glm1,type="response")
 
+
+varDF2$fits<-predict(glm1,type="response",newdata=varDF)
 
 #need to get x and y coords below
 library(ggplot2)
@@ -680,6 +699,9 @@ find.int$interactions#none!
 find.int$rank.list
 
 ####################################################################################################
+#get data from 
+#formatting...standardOccModel
+####################################################################################################
 
 #for BUGS
 
@@ -693,23 +715,23 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   nuSpecies = listlengthDF$nuSpecies,
                   y = listlengthDF$y,
                   #add an adm effect
-                  adm = listlengthDF$adm2,
-                  n.adm = length(unique(listlengthDF$adm2)),
+                  adm = siteInfo$admN,
+                  n.adm = length(unique(siteInfo$admN)),
                   habitat = ifelse(listlengthDF_SiteCovs$habitat=="Forest",1,0),
-                  bio1 = listlengthDF_SiteCovs$bio1,
+                  bio1 = scale(listlengthDF_SiteCovs$bio1),
                   bio1_2 = listlengthDF_SiteCovs$bio1^2,
                   bio6 = listlengthDF_SiteCovs$bio6,
                   bio5 = listlengthDF_SiteCovs$bio5,
                   bio5_2 = listlengthDF_SiteCovs$bio5^2,
                   forest = listlengthDF_SiteCovs$Forest,
-                  open = listlengthDF_SiteCovs$Open,
+                  open = scale(listlengthDF_SiteCovs$Open),
                   top = log(listlengthDF_SiteCovs$Top+1),
                   alpine_habitat1 = listlengthDF_SiteCovs$alpine_habitat1,
                   alpine_habitat2 = log(listlengthDF_SiteCovs$alpine_habitat2+1),
                   alpine_habitat3 = log(listlengthDF_SiteCovs$alpine_habitat3+1),
                   alpine_habitat4 = log(listlengthDF_SiteCovs$alpine_habitat4+1),
-                  tree_line_position = listlengthDF_SiteCovs$tree_line_position,
-                  tree_line_position2 = listlengthDF_SiteCovs$tree_line_position^2)
+                  tree_line_position = scale(listlengthDF_SiteCovs$tree_line_position),
+                  tree_line_position2 = scale(listlengthDF_SiteCovs$tree_line_position^2))
 
 #alpine_habitat:
 #1= Open lowland, 
@@ -719,7 +741,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
 
 #need to specify initial values
 library(reshape2)
-zst <- acast(listlengthDF, siteIndex~YearCollected, value.var="y",fun=max,na.rm=T)
+zst <- acast(listlengthDF, siteIndex~yearIndex, value.var="y",fun=max,na.rm=T)
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
@@ -728,10 +750,49 @@ source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
 
 ##########################################################################################
 
-#run model with random effects
+#costant detection proability
+params <- c("mean.p","mean.psi")
+
+#specify model structure
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant.txt", n.thin=10,
+             n.chains=3, n.burnin=600,n.iter=2000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_random_missing_5km_basic0.RData")
+
+
+#run model with random effects on adm
 
 #specify parameters to monitor
-params <- c("int","psi.fs","dtype.p","mu.lp","a","random.adm.sd")
+params <- c("psi.fs","sd.y","sd.s","mean.p","mean.psi","random.adm.sd","random.adm")
+
+#specify model structure
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
+             n.chains=3, n.burnin=600,n.iter=2000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_random_missing_5km_basic.RData")
+
+#run model with random effects on adm and year and site
+
+#specify parameters to monitor
+params <- c("psi.fs","sd.y","sd.s","mean.p","mean.psi","random.adm.sd","random.adm")
+
+#specify model structure
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
+             n.chains=3, n.burnin=600,n.iter=2000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_random_missing_5km_basic2.RData")
+
+#include year on the detection probability
+#run model with random effects on adm
+
+#specify parameters to monitor
+params <- c("int","psi.fs","dtype.p","mu.lp","a","random.adm.sd","alpha.p")
 
 #specify model structure
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
@@ -739,27 +800,59 @@ out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n
              n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km.RData")
+save(out1,file="out1_OM_random_missing_5km1.RData")
 
-#########################################################################################
-
-#run model including explanatory variables
+#include other covariates on detection
 
 #specify parameters to monitor
-params <- c("int","psi.fs","dtype.p","mu.lp","beta","a","det.elevation","det.elevation2")
-
-##########################################################################################
+params <- c("int","psi.fs","dtype.p","mu.lp","beta","a","d.tree","d.tree2")
 
 #specify model structure
-bugs.data$occDM <- model.matrix(~ scale(bugs.data$bio1)+
-                                  scale(bugs.data$tree_line_position) + scale(bugs.data$tree_line_position2)+
-                                  scale(bugs.data$open))[,-1]
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
+             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
 
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_random_missing_5km_det.RData")
+#d.type effect is negative!!
+
+#just elevation effect on detection (wasnt scaled)
+
+#specify parameters to monitor
+params <- c("int","psi.fs","mu.lp","beta","a","int.d","d.tree","d.tree2")
+
+#specify model structure
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
+             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_random_missing_5km_det2.RData")
+
+#elevation effect and L2/L
+
+#specify parameters to monitor
+params <- c("int","psi.fs","mu.lp","beta","a","int.d","dtype.p","d.tree","d.tree2","random.adm.sd")
+
+#specify model structure
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
+             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_OM_random_missing_5km_det3.RData")
+
+########################################################################################
+
+#run model including explanatory variables on observation
+
+#specify model structure
+bugs.data$occDM <- model.matrix(~ bugs.data$tree_line_position + bugs.data$tree_line_position2)[,-1]
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_variables_missing.txt", n.thin=10,
-             n.chains=3, n.burnin=5000,n.iter=10000,parallel=T)
+             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
 
 print(out1,2)
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
@@ -770,20 +863,13 @@ colnames(bugs.data$occDM)
 
 #plot occupancy model
 out2<-update(out1,parameters.to.save=c("muZ","z"),n.iter=100)
-plotZ(out2)
+plotZ(out2,param="z")
+plotZ(out2,param="muZ")
 plotZerror(out2)
 
 ##########################################################################################
  
 #also using jagam
-
-#add to the dataset, the coordinates of the grid
-gridDF<-as.data.frame(gridTemp,xy=T)
-varDF<-merge(varDF,gridDF,by.x="grid",by.y="layer",all.x=T)
- 
-#get info on whether there was an observation within each grid
-occupancyGrid<-ddply(occupancyDF,.(grid),summarise,species=max(y))
-varDF<-merge(varDF,occupancyGrid,by="grid",all.x=T)
 
 #fit as gam
 library(mgcv)
@@ -825,3 +911,39 @@ traceplot(out1)
 print(out1,2)
 
 #########################################################################################
+
+#explore detection prob by hand
+
+#per year - for each line, what fraction of surveys had a ptarmigan in it
+#get rid of NAs
+
+listlengthDF_NAfree<-subset(listlengthDF,!is.na(visit))
+propSuccess<-ddply(listlengthDF_NAfree,.(grid,adm,adm2,YearCollected),
+                   summarise,
+                   propY=ifelse(length(y)>1,mean(y),NA),#want to calculate it only when there are repeat visits
+                   meanL=mean(L),
+                   meanL2=mean(L2),
+                   meanL3=mean(L3))
+propSuccess<-subset(propSuccess,!is.na(propY))
+
+hist(propSuccess$propY)#very all or nothing
+mean(propSuccess$propY[propSuccess$propY>0])#0.86
+
+#look at relationship
+library(ggplot2)
+library(cowplot)
+q1<-qplot(meanL,propY,data=propSuccess)#negative relationship
+q2<-qplot(meanL2,propY,data=propSuccess)#negative relationship
+q3<-qplot(meanL3,propY,data=propSuccess)#more positive
+plot_grid(q1,q2,q3)
+
+
+#plot in relation to site covariates
+propSuccess<-merge(propSuccess,listlengthDF_SiteCovs,by=c("grid","adm","adm2","site"))
+q1<-qplot(tree_line_position,propY,data=propSuccess)#quadratic relationship
+q2<-qplot(access,propY,data=propSuccess)#positivee??
+q3<-qplot(bio1,propY,data=propSuccess)#negative relationship
+plot_grid(q1,q2,q3)
+
+########################################################################################
+
