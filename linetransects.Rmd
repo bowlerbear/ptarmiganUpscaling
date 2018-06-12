@@ -29,7 +29,7 @@ library(plyr); library(dplyr)
 library(ggplot2)
 
 #subset
-allData<-subset(allData,Year>2006)
+allData<-subset(allData,Year>2006 & Year<2018)
 
 #remove hyphens for help with subsetting
 allData$Fylkesnavn<-gsub("-"," ",allData$Fylkesnavn)
@@ -37,9 +37,7 @@ allData$Rapporteringsniva<-gsub("-"," ",allData$Rapporteringsniva)
 
 #change kommune name for Dovre Fjellstyre
 allData$Kommunenavn[which(allData$Kommunenavn=="Dovre Fjellstyrene")]<-"Dovre"
-
-#Nordland__Indre Troms             
-#Troms__Indre Troms 
+#Nordland__Indre Troms  Troms__Indre Troms 
 allData$Fylkesnavn[which(allData$Rapporteringsniva=="Indre Troms")]<-"Troms"
 
 #get number of individuals per line
@@ -64,6 +62,8 @@ my.n <- acast(nuIndivs,Line~Year,value.var="nuTotal")
 summary(as.numeric(apply(my.n,1,max,na.rm=T)))#yes!!
 
 #get transect length data
+#mistake with 1405 - transect length
+allData$LengdeTaksert[which(allData$LinjeID==1405&allData$LengdeTaksert==1100)] <- 11000
 allData$Line<-paste(allData$Fylkesnavn,allData$Rapporteringsniva,sep="_")
 allData$Line<-paste(allData$Line,allData$OmradeID,sep="#")
 allData$Line<-paste(allData$Line,allData$LinjeID,sep="-")
@@ -118,13 +118,6 @@ bugs.data <- list(#For the state model
                   detectionSite = allDetections$Rapporteringsniva,
                   detectionSiteYear = allDetections$detectionSiteYear)
 
-#mistake with 1405 - transect length
-#highlight all those line with different transect lengths
-tl<-ddply(allData,.(LinjeID),summarise,nu=length(unique(LengdeTaksert)),maxtl=max(LengdeTaksert,na.rm=T),mintl=min(LengdeTaksert,na.rm=T))
-tl<-subset(tl,nu>1)
-tl$diff<-tl$maxtl-tl$mintl
-tl<-tl[order(tl$diff,decreasing=T),]
-
 #add lengths
 bugs.data$n.LineYear<-length(unique(bugs.data$detectionLineYear))
 bugs.data$n.SiteYear<-length(unique(bugs.data$detectionSiteYear))
@@ -146,7 +139,7 @@ params <- c("int","line.d.sd","year.d.sd","Density")
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel.txt", n.thin=nt,
-               n.chains=3, n.burnin=200,n.iter=1000,parallel=T)
+               n.chains=3, n.burnin=2000,n.iter=10000,parallel=T)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
 save(out1,file="out1_linetransectModel.RData")
@@ -166,11 +159,11 @@ fits<-getBUGSFits(out1)
 #get average values per year
 fits<-ddply(fits,.(Line,Fylkesnavn,Rapporteringsniva,originalLinjeID),summarise,mean=mean(mean))
 
+summary(fits$mean)
+
 ```
 
-Plot predictions based on transect coordinates
-
-make lines spatial
+Make lines spatial
 
 ```{r}
 
@@ -202,6 +195,12 @@ rownames(mydata) <- paste(mydata$LinjeID)
 Lines_spatial <- SpatialLinesDataFrame(spTemp, mydata, match.ID=T)
 plot(Lines_spatial)
 
+
+```
+
+Plot predictions based on transect coordinates
+
+```{r}
 library(sp)
 library(ggplot2)
 
@@ -253,10 +252,11 @@ library(raster)
 library(maptools)
 data(wrld_simpl)
 Norway<- subset(wrld_simpl,NAME=="Norway")
+Norway <- gBuffer(Norway,width=1)
 plot(Norway)
 
 #create grid
-newres=0.5
+newres=0.05
 mygrid<-raster(extent(Norway))
 res(mygrid)<-newres
 mygrid[]<-1:ncell(mygrid)
@@ -317,13 +317,11 @@ allData$layer[allData$ObservasjonId%in%allDataObs$ObservasjonId]<-allDataObs$cel
 NAs<-acast(allData,layer~Year,value.var="totalIndiv",fun=sum)
 
 #nothing was seen in all cells 
-row.names(NAs)[!row.names(NAs)%in%row.names(groupInfo)]
-row.names(groupInfo)[!row.names(groupInfo)%in%row.names(NAs)]
-# "101" "701" 
-#In "757" there was!!!! but observations were deleted by quality check
-row.names(transectLengths)[!row.names(transectLengths)%in%row.names(groupInfo)]
-row.names(groupInfo)[!row.names(groupInfo)%in%row.names(transectLengths)]#702 too
-removeGrids<-c("101","701","757","702")
+a<-row.names(NAs)[!row.names(NAs)%in%row.names(groupInfo)]
+b<-row.names(groupInfo)[!row.names(groupInfo)%in%row.names(NAs)]
+c<-row.names(transectLengths)[!row.names(transectLengths)%in%row.names(groupInfo)]
+d<-row.names(groupInfo)[!row.names(groupInfo)%in%row.names(transectLengths)]
+removeGrids<-unique(c(a,b,c,d))
 
 #anyhow drop these cells!
 NAs<-subset(NAs,!row.names(NAs)%in%removeGrids)
@@ -426,8 +424,33 @@ plot(mygrid)
 Now get the environmental information for these cells
 
 ```{r}
+load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/varDF_allEnvironData_5km.RData")
 
+varDF<-unique(varDF)
+siteInfo<-merge(siteInfo,varDF,by.x="layer",by.y="grid",all.x=T,sort=FALSE)
 
+#add new variables to the bugs data
+bugs.data$occDM <- model.matrix(~ as.numeric(scale(siteInfo$bio1)) +
+                                  as.numeric(scale(siteInfo$Open)) +
+                                  as.numeric(scale(siteInfo$tree_line_position)) +
+                                  as.numeric(scale(siteInfo$tree_line_position^2)))[,-1]
+bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 ```
 
+Run model
+
+```{r}
+
+source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
+params <- c("int","line.d.sd","beta")
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel_variables.txt", n.thin=nt,
+               n.chains=3, n.burnin=1000,n.iter=5000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+#save(out1,file="out1_linetransectModel_Gridded_variables.RData")
+traceplot(out1)
+
+```
