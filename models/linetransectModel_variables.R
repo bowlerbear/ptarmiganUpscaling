@@ -1,4 +1,4 @@
-#distance model
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 cat("
     model{
 
@@ -60,15 +60,6 @@ cat("
     for(t in 1:n.Years){
     random.gs.year[t] ~ dnorm(0,year.tau)
     }
-
-    #long-term trend with random site effects
-    long.term.trend ~ dnorm(0,0.001)
-    trend.line.sd ~ dunif(0,10)
-    trend.line.tau <- pow(trend.line.sd,-2)
-    for(j in 1:n.Lines){
-      random.gs.trend.line[j] ~ dnorm(0,trend.line.tau)
-    }
-
 
     #Model
     #for each detection, model group size
@@ -143,7 +134,6 @@ cat("
       beta[i] ~ dnorm(0,0.1)
     }
 
-
     #Observation model:
     for(j in 1:n.Lines){
       for(t in 1:n.Years){
@@ -159,8 +149,8 @@ cat("
       #linear predictor on density
         log(Density[j,t]) <- int.d + 
                             random.d.line[j] + 
-                            random.d.site[site[j]] +
-                            inprod(beta[],occDM[site[j],]) 
+                            #random.d.site2[site2[j]] +
+                            inprod(beta[],occDM[j,]) 
 
     }}
 

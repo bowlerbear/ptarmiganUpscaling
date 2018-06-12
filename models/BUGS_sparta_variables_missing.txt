@@ -7,9 +7,8 @@
   for (i in 1:nsite){ 
     for (t in 1:nyear){
       z[i,t] ~ dbern(muZ[i,t]) 
-      logit(muZ[i,t])<- int + a[t] + inprod(beta[],occDM[site[i],])
-      #
-      # year as a fixed factor and site as a random factor and environ variables
+      logit(muZ[i,t])<- int + a[t] + inprod(beta[],occDM[i,]) + random.adm[adm[i]]
+      # year as a fixed factor and year (a) as a random factor and environ variables
     }
   }   
   
@@ -19,15 +18,24 @@
     Py[j]<- z[site[j],year[j]]*p[j] #probability to detect = prob of occ * prob of detection
 
     #detection model:
-    logit(p[j]) <-  alpha.p[year[j]] + dtype.p*L[j] 
+    logit(p[j]) <-  int.det + dtype.p*L2[j]/L[j] +inprod(beta.det[],occDM[site[j],]) + random.adm.det[adm[site[j]]]
     #depends on year and list length
     } 
   
-
   # Derived parameters
   for (t in 1:nyear) {  
     psi.fs[t] <- sum(z[1:nsite, t])/nsite
   } 
+
+  #model for missing list length data
+  for(j in 1:nvisit){
+    L[j] ~ dpois(muL[j])
+    L2[j] ~ dpois(muL2[j])
+    muL[j] <- intL 
+    muL2[j] <- intL2 
+    }
+    intL ~ dunif(0,100)  
+    intL2 ~ dunif(0,100)
 
   #Priors 
 
@@ -48,7 +56,16 @@
     tau2 <- 1/(sigma2 * sigma2) 
     sigma2 ~ dt(0, 1, 1)T(0,) 
 
-    #Observation model priors 
+    #adm effects
+    for(i in 1:n.adm){
+      random.adm[i] ~ dnorm(0,random.adm.tau)
+    }
+    random.adm.tau <- pow(random.adm.sd,-2)
+    random.adm.sd ~ dunif(0,10)
+
+    #Observation model priors
+    int.det ~ dnorm(0,0.001)
+
     #year effects
     for (t in 1:nyear) {
       alpha.p[t] ~ dnorm(0, tau.lp)            
@@ -59,9 +76,20 @@
     for(i in 1:n.covs){
       beta[i] ~ dnorm(0,0.1)
     }
+    
+    for(i in 1:n.covs){
+      beta.det[i] ~ dnorm(0,0.1)
+    }
 
     #observation model covariates
     dtype.p ~ dnorm(0, 0.01)
+
+    #adm effects
+    for(i in 1:n.adm){
+    random.adm.det[i] ~ dnorm(0,random.adm.det.tau)
+    }
+    random.adm.det.tau <- pow(random.adm.det.sd,-2)
+    random.adm.det.sd ~ dunif(0,10)
 
   }
     
