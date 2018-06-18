@@ -65,14 +65,15 @@ cat("
         # True state model for the partially observed true state
         z[j,t] ~ dbern(psi[j,t])      # True occupancy z at site j in year t
         logit(psi[j,t]) <- int.psi
-        # + random.adm[adm[j]] + random.adm2[adm2[j]]
+        #random.adm[adm[j]] + random.adm2[adm2[j]]
         #inprod(beta.det[],occDM[site[j],])
         
         # Observation model for the actual observations
         for (v in 1:nvisit) {
         y[j,t,v] ~ dbern(p.eff[j,t,v])    # Detection-nondetection at each v
         p.eff[j,t,v] <- z[j,t] * p[j,t,v]  
-        logit(p[j,t,v]) <- int.p + random.adm.p[adm[j]] + random.adm2.p[adm2[j]]
+        logit(p[j,t,v]) <- int.p 
+        #random.adm.p[adm[j]] + random.adm2.p[adm2[j]]
       }
       }
       }

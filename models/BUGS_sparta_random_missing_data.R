@@ -1,3 +1,4 @@
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 cat("
   model{
   # JAGS code for SPARTA model 
@@ -9,7 +10,7 @@ cat("
       
       z[i,t] ~ dbern(muZ[i,t]) 
       
-      logit(muZ[i,t]) <- int.alpha + random.adm[adm[i]] 
+      logit(muZ[i,t]) <- int.alpha + random.adm[adm[i]] + random.adm2[adm2[i]]
       
       # year as a fixed factor and site as a random factor and environ variables
     }
@@ -71,6 +72,14 @@ cat("
     random.adm.tau <- pow(random.adm.sd,-2)
     random.adm.sd ~ dunif(0,10)
     
+
+    #adm2 effects
+    for(i in 1:n.adm2){
+    random.adm2[i] ~ dnorm(0,random.adm2.tau)
+    }
+    random.adm2.tau <- pow(random.adm2.sd,-2)
+    random.adm2.sd ~ dunif(0,10)
+
     #Observation model priors
     #########################
 
