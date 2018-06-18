@@ -18,7 +18,7 @@ cat("
     
     Py[j]<- z[site[j]]*p[j] #probability to detect = prob of occ * prob of detection
 
-    logit(p[j]) <-  int.d + a[year[j]] 
+    logit(p[j]) <-  int.d + eta.s.y[siteyear[j]]
 
   } 
 
@@ -41,6 +41,14 @@ cat("
     } 
     tau.s <- 1/(sd.s * sd.s) 
     sd.s ~ dunif(0,10)
+
+    #site/year effects
+    for (i in 1:nsiteyear) {
+      eta.s.y[i] ~ dnorm(0, tau.s.y)       
+    } 
+    tau.s.y <- 1/(sd.s.y * sd.s.y) 
+    sd.s.y ~ dunif(0,10)
+
 
   }
     ",fill=TRUE,file="BUGS_sparta_constant_site.txt")

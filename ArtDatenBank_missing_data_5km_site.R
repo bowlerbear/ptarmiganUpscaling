@@ -38,6 +38,7 @@ nrow(subset(siteSummary,Surveyed==1 & adm!="outside"))#15527
 #out2<-unique(listlengthDF$grid[is.na(listlengthDF$y)])
 #sum(out%in%out2)
 
+#####################################################################
 #restrict the data?? No
 set.seed(3)
 
@@ -64,6 +65,9 @@ listlengthDF_SiteCovs<-subset(listlengthDF,!duplicated(grid))
 listlengthDF$admN<-as.numeric(factor(listlengthDF$adm))
 listlengthDF$admN2<-as.numeric(factor(listlengthDF$adm2))
 siteInfo<-unique(listlengthDF[,c("siteIndex","admN","grid","admN2")])
+
+#add random siye/year effect
+listlengthDF$siteyearIndex<-as.numeric(factor(interaction(listlengthDF$siteIndex,listlengthDF$yearIndex)))
 
 ###################################################################################################
 #fit as glm with explanatory variables
@@ -150,6 +154,8 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   grid = listlengthDF$grid,
                   site = listlengthDF$siteIndex,
                   year = listlengthDF$yearIndex,
+                  nsiteyear = length(unique(listlengthDF$siteyearIndex)),
+                  siteyear = listlengthDF$siteyearIndex,
                   L = listlengthDF$L,
                   nuSpecies = listlengthDF$nuSpecies,
                   y = listlengthDF$y,
@@ -192,7 +198,7 @@ source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
 ##########################################################################################
 
 #costant detection proability
-params <- c("mean.p","mean.psi")
+params <- c("mean.p","mean.psi","sd.s.y")
 
 #specify model structure
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
