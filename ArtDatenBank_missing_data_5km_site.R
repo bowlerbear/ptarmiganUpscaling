@@ -1,6 +1,71 @@
 ####################################################################################################
 source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/formattingArtDatenBank_missing_data.R')
 ###################################################################################################
+oldlistlengthDF<-listlengthDF
+
+#collapse data to site-level rather than site/year level (too many NAs and we arent interested in year..)
+listlengthDF <- subset(listlengthDF,!is.na(y))
+listlengthDF <- merge(listlengthDF,listlengthDF_SiteCovs[,-c(2:10,12)],#remove variables that are not site-specific
+                    by=names(listlengthDF_SiteCovs)[-c(2:10,12)],all=T)
+#for missing year data give random values
+listlengthDF$yearIndex[is.na(listlengthDF$y)]<-
+  sample(listlengthDF$yearIndex[!is.na(listlengthDF$y)],length(listlengthDF$yearIndex[is.na(listlengthDF$y)]))
+
+#how much missing data is there?
+length(listlengthDF$y[listlengthDF$y==0])#786743
+length(listlengthDF$y[listlengthDF$y==1])#20541
+length(listlengthDF$y[is.na(listlengthDF$y)])#9775
+
+#where do we have not data???
+siteSummary<-ddply(listlengthDF,.(grid,adm),summarise,
+                   Notsurveyed=ifelse(all(is.na(y)),1,0))
+mygrid[]<-0
+mygrid[siteSummary$grid]<-siteSummary$Notsurveyed
+plot(mygrid,main="notsurveyed")          
+nrow(subset(siteSummary,Notsurveyed==1))#9775
+nrow(subset(siteSummary,Notsurveyed==1 & adm!="outside"))#8483
+
+#where do we have data
+siteSummary<-ddply(listlengthDF,.(grid,adm),summarise,
+                   Surveyed=ifelse(any(!is.na(y)),1,0))
+mygrid[]<-0
+mygrid[siteSummary$grid]<-siteSummary$Surveyed
+plot(mygrid,main="surveyed")
+nrow(subset(siteSummary,Surveyed==1))#18007
+nrow(subset(siteSummary,Surveyed==1 & adm!="outside"))#15527
+
+#out<-unique(listlengthDF$grid[!is.na(listlengthDF$y)])
+#out2<-unique(listlengthDF$grid[is.na(listlengthDF$y)])
+#sum(out%in%out2)
+
+#restrict the data?? No
+set.seed(3)
+
+listlengthDF<-ddply(listlengthDF,.(siteIndex,yearIndex),function(x){
+  x$visitNu<-sample(1:nrow(x))
+  x<-x[order(x$visitNu),]
+})
+oldlistlengthDF<-listlengthDF
+
+summary(listlengthDF$visitNu[!is.na(listlengthDF$y)])
+table(listlengthDF$visitNu)
+#subset to 13 (median)
+listlengthDF<-subset(listlengthDF,visitNu<=13)
+
+#####################################################################
+
+#order data by site and year
+listlengthDF<-arrange(listlengthDF,siteIndex,yearIndex)
+
+#extract site data
+listlengthDF_SiteCovs<-subset(listlengthDF,!duplicated(grid))
+
+#adm data
+listlengthDF$admN<-as.numeric(factor(listlengthDF$adm))
+listlengthDF$admN2<-as.numeric(factor(listlengthDF$adm2))
+siteInfo<-unique(listlengthDF[,c("siteIndex","admN","grid","admN2")])
+
+###################################################################################################
 #fit as glm with explanatory variables
 
 #add to the dataset, the coordinates of the grid
@@ -75,23 +140,6 @@ find.int <- gbm.interactions(brt1)
 find.int$interactions#none!
 find.int$rank.list
 
-####################################################################################################
-
-#restrict the data??
-
-set.seed(3)
-
-listlengthDF<-ddply(listlengthDF,.(siteIndex,yearIndex),function(x){
-  x$visitNu<-sample(1:nrow(x))
-  x<-x[order(x$visitNu),]
-})
-oldlistlengthDF<-listlengthDF
-  
-summary(listlengthDF$visitNu[!is.na(listlengthDF$y)])
-table(listlengthDF$visitNu)
-#subset to 13 (median)
-listlengthDF<-subset(listlengthDF,visitNu<=13)
-
 ###################################################################################################
 
 #for BUGS
@@ -134,7 +182,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
 
 #need to specify initial values
 library(reshape2)
-zst <- acast(listlengthDF, siteIndex~yearIndex, value.var="y",fun=max,na.rm=T)
+zst <- as.numeric(tapply(listlengthDF$y, listlengthDF$siteIndex,max,na.rm=T))
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
@@ -148,12 +196,11 @@ params <- c("mean.p","mean.psi")
 
 #specify model structure
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant.txt", n.thin=10,
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant_site.txt", n.thin=10,
              n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
 save(out1,file="out1_OM_random_missing_5km_basic0.RData")
-
 
 ############################################################################################
 #run model with random effects on adm
