@@ -93,6 +93,12 @@ allDetections$detectionSiteYear<-
   as.numeric(factor(interaction(allDetections$Rapporteringsniva,allDetections$Year)))
 
 head(allDetections)
+```
+
+
+Compile for BUGS
+
+```{r}
 
 #Organise fur bugs
 bugs.data <- list(#For the state model
@@ -122,27 +128,24 @@ bugs.data <- list(#For the state model
 bugs.data$n.LineYear<-length(unique(bugs.data$detectionLineYear))
 bugs.data$n.SiteYear<-length(unique(bugs.data$detectionSiteYear))
 
-#year one priors
-bugs.data$year1<-as.numeric(apply(my.n,1,function(x)ifelse(!is.na(x[1]),x[1],max(x,na.rm=T))))
-bugs.data$year1[bugs.data$year1==0]<-1
-
 names(bugs.data)
 
 ```
 
-Run model in JAGS 
+Run model in JAGS (first time only)
 
 ```{r}
 
 source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
-params <- c("int","line.d.sd","year.d.sd","Density")
+params <- c("int.d","line.d.sd","year.d.sd","Density")
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel.txt", n.thin=nt,
-               n.chains=3, n.burnin=2000,n.iter=10000,parallel=T)
+               n.chains=nc, n.burnin=2000,n.iter=10000,parallel=T)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_linetransectModel.RData")
+#save(out1,file="out1_linetransectModel.RData")#simple group size model(year and site)
+#save(out1,file="out1_linetransectModel_2.RData")#re-run with more complicated model
 traceplot(out1)
 
 ```
@@ -152,14 +155,19 @@ Get model fits
 ```{r}
 
 source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
-load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs/out1_linetransectModel.RData")
+load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs/out1_linetransectModel_2.RData")
 load("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/siteInfo.RData")
 
+print(out1$summary,2)
+
 fits<-getBUGSFits(out1)
+
 #get average values per year
 fits<-ddply(fits,.(Line,Fylkesnavn,Rapporteringsniva,originalLinjeID),summarise,mean=mean(mean))
 
 summary(fits$mean)
+
+#int.d is 7.5 ptarmigan per km squared
 
 ```
 
@@ -231,7 +239,7 @@ allDataObs<-subset(allDataObs,Latitude!=0)
 summary(allDataObs$Latitude)
 summary(allDataObs$Longitude)
  
-#Remove obs whose coords differ from predicted coords
+#Remove obs whose coords differ from predicted coords by 500m
 allDataObs$diff<-abs(allDataObs$LinjeAvstand-allDataObs$N_dist)
 hist(allDataObs$diff)
 summary(allDataObs$diff)
@@ -264,44 +272,74 @@ plot(mygrid)
 gridTemp<-mygrid
 
 #get presences
-allDataObs$cells<-extract(mygrid,allDataObs)
-
-#Get number of groups seen per grid
-library(reshape2)
-groupInfo <- acast(allDataObs@data,cells~Year,value.var="totalIndiv",fun=length)
-
-#Get total individuals seen per grid
-totalsInfo<-acast(allDataObs@data,cells~Year,value.var="totalIndiv",fun=sum)
-
-#get average group size per grid
-groupSizes<-acast(allDataObs@data,cells~Year,value.var="totalIndiv",fun=mean)
-groupSizes[is.na(groupSizes)]<-NA
+allDataObs$grid<-extract(mygrid,allDataObs)
 
 ```
 
 (3) Work about how much each grid was covered by a line transect
 
-```{r}
+```{r, results='asis'}
 
 library(rgeos)
 projection(mygrid)<-crs(Lines_spatial)#they are both in lon lat
 rsp <- rasterToPolygons(mygrid)
-#convert into m grid
-rsp <-spTransform(rsp,CRS("+proj=eck4 +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
-Lines_spatial <-spTransform(Lines_spatial,CRS("+proj=eck4 +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"))
+
+#convert into a m grid
+rsp <-spTransform(rsp,CRS("+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+Lines_spatial <-spTransform(Lines_spatial,CRS("+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+
+#get overlap
 rp <- raster::intersect(Lines_spatial,rsp)
 rp$length <- gLength(rp, byid=TRUE) 
 mapping<-rp
-rp<-ddply(rp@data,.(layer),summarise,length=sum(length))
 
+head(rp)
+#  LinjeID           Fylkesnavn   Region Rapporteringsniva OmradeID OmradeNavn  layer    length
+#1     122 Oppland              Statskog         Kongsvoll      285    Gåvålia 111645 3680.0004
+#2      93 Oppland              Statskog         Kongsvoll      286  Kongsvoll 111642 2221.2015
+#3      93 Oppland              Statskog         Kongsvoll      286  Kongsvoll 111643 1520.0632
+#4     103 Oppland              Statskog         Kongsvoll      286  Kongsvoll 111074 2330.2495
+#5     103 Oppland              Statskog         Kongsvoll      286  Kongsvoll 111075  963.9436
+#6    1389 Oppland              Statskog         Kongsvoll      286  Kongsvoll 111643 2450.0003
+
+#checking this works
+rp2<-subset(rp,LinjeID==103)
+rsp2<-subset(rsp,layer%in%c("111074","111075"))
+plot(rsp2)
+plot(rp2,add=T)#seem to overlap 2 cells indeed
+
+#are there any cells overlapped more than 2 cells
+#rpTot<-ddply(rp@data,.(LinjeID),summarise,nuCells=length(unique(layer)))
+
+#LinjeID nuCells
+#400       6
+#rp2<-subset(rp,LinjeID==400)
+#rsp2<-subset(rsp,layer%in%rp2@data$layer)
+#plot(rsp2)
+#plot(rp2,add=T)#seem to overlap 6 cells indeed -but its not in a straight line
+
+#get total length per grid cell
+rp<-ddply(rp@data,.(layer),summarise,length=sum(length))
+summary(rp$length)
+
+#plot it
 mygrid[]<-0
 mygrid[rp$layer]<-rp$length
 plot(mygrid)
 
 #turn into an array
-transectLengths<-expand.grid(grid=rp$layer,year=2007:2017)
+transectLengths<-expand.grid(grid=rp$layer,Year=2007:2017)
 transectLengths$length<-rp$length[match(transectLengths$grid,rp$layer)]
-transectLengths<-acast(transectLengths,grid~year,value.var="length")
+transectLengths$LinjeID<-mapping$LinjeID[match(transectLengths$grid,mapping$layer)]
+
+#add zeros for transect lengths... when when a line wasnt visited in a year
+allSurveys<-unique(allData[!is.na(allData$TakseringID),c("Year","LinjeID")])
+transectLengths$Ran<-interaction(transectLengths$Year,transectLengths$LinjeID) %in% interaction(allSurveys$Year,allSurveys$LinjeID)
+transectLengths$length[transectLengths$Ran==FALSE]<-0
+
+#cast into an array
+tlDF<-transectLengths
+transectLengths<-acast(tlDF,grid~Year,value.var="length")
 
 ```
 
@@ -309,43 +347,37 @@ transectLengths<-acast(transectLengths,grid~year,value.var="length")
 
 ```{r}
 
-head(allData)
+head(allDataObs)
+head(tlDF)
 
-#map line transect to grid cell
-allData<-merge(allData,mapping[,c("LinjeID","layer")],by="LinjeID",all=T)
-allData$layer[allData$ObservasjonId%in%allDataObs$ObservasjonId]<-allDataObs$cells[match(allData$ObservasjonId[allData$ObservasjonId%in%allDataObs$ObservasjonId],allDataObs$ObservasjonId)]
-NAs<-acast(allData,layer~Year,value.var="totalIndiv",fun=sum)
+#Get statistics per year and grid
+obsDF<-ddply(allDataObs@data,.(grid,Year),summarise,
+                   nuGroups=length(totalIndiv),
+                   totalsInfo=sum(totalIndiv),
+                   groupsize=mean(totalIndiv))
 
-#nothing was seen in all cells 
-a<-row.names(NAs)[!row.names(NAs)%in%row.names(groupInfo)]
-b<-row.names(groupInfo)[!row.names(groupInfo)%in%row.names(NAs)]
-c<-row.names(transectLengths)[!row.names(transectLengths)%in%row.names(groupInfo)]
-d<-row.names(groupInfo)[!row.names(groupInfo)%in%row.names(transectLengths)]
-removeGrids<-unique(c(a,b,c,d))
 
-#anyhow drop these cells!
-NAs<-subset(NAs,!row.names(NAs)%in%removeGrids)
-groupInfo<-subset(groupInfo,!row.names(groupInfo)%in%removeGrids)
-totalsInfo<-subset(totalsInfo,!row.names(totalsInfo)%in%removeGrids)
-groupSizes<-subset(groupSizes,!row.names(groupSizes)%in%removeGrids)
-transectLengths<-subset(transectLengths,!row.names(transectLengths)%in%removeGrids)
-allData<-subset(allData,!layer%in%removeGrids)
-allDetections<-subset(allDataObs,!cells%in%removeGrids)
-allDetections$detectionLineYear<-
-  as.numeric(factor(interaction(allDetections$LinjeID,allDetections$Year)))
-allDetections$detectionSiteYear<-
-  as.numeric(factor(interaction(allDetections$Rapporteringsniva,allDetections$Year)))
+#add info to the transects data frame
+tlDF<-merge(tlDF,obsDF,by=c("grid","Year"),all.x=T)
+
+#add zeros for when there was a transect but nothing was seen
+tlDF$nuGroups[is.na(tlDF$nuGroups) & (tlDF$length>0)]<-0
+tlDF$totalsInfo[is.na(tlDF$totalsInfo) & (tlDF$length>0)]<-0
+
+#cast into arrays
+library(reshape2)
+groupInfo <- acast(tlDF,grid~Year,value.var="nuGroups")
+totalsInfo<-acast(tlDF,grid~Year,value.var="totalsInfo")
+groupSizes<-acast(tlDF,grid~Year,value.var="groupsize")
 
 #check data frames now match
-all(row.names(groupInfo)==row.names(NAs))
 all(row.names(groupInfo)==row.names(transectLengths))
+all(row.names(totalsInfo)==row.names(transectLengths))
 all(row.names(groupSizes)==row.names(transectLengths))
 
-#now insert NAs
-transectLengths[is.na(NAs)]<-0
-groupSizes[is.na(NAs)]<-NA
-totalsInfo[is.na(NAs)]<-NA
-groupInfo[is.na(NAs)]<-NA
+#put NAs where transect length is zero
+groupInfo[transectLengths==0]<-NA
+totalsInfo[totalsInfo==0]<-NA
 
 ```
 
@@ -354,22 +386,34 @@ groupInfo[is.na(NAs)]<-NA
 
 ```{r}
 
-allData$cellID<-as.numeric(as.factor(allData$layer))
-allDetections$cellID<-allData$cellID[match(allDetections$LinjeID,allData$LinjeID)]
-siteInfo<-unique(allData[,c("cellID","layer","Fylkesnavn","Rapporteringsniva")])
-siteInfo<-siteInfo[order(siteInfo$cellID),]
-siteInfo<-subset(siteInfo,!duplicated(siteInfo$cellID))#temporary measure - should not be here for smaller grid sizes
-row.names(groupInfo)<-siteInfo$cellID[match(row.names(groupInfo),siteInfo$layer)]
-row.names(transectLengths)<-siteInfo$cellID[match(row.names(transectLengths),siteInfo$layer)]
+#get site Info all grids
+siteInfo<-unique(allDataObs@data[,c("LinjeID","Fylkesnavn","Rapporteringsniva")])
+allgrids<-unique(tlDF[,c("grid","LinjeID")])
+siteInfo<-merge(siteInfo,allgrids,by=c("LinjeID"))
+siteInfo<-siteInfo[order(siteInfo$grid),]
+
+#add site factor indices
+all(row.names(transectLengths)==siteInfo$grid)
+siteInfo$gridIndex<-as.numeric(as.factor(siteInfo$grid))
+siteInfo$RapporteringsnivaN<-as.numeric(factor(siteInfo$Rapporteringsniva))
+siteInfo$FylkesnavnN<-as.numeric(factor(siteInfo$Fylkesnavn))
+
+#to have it renamed as a specific object
+siteInfo_LineTransects<-siteInfo
+
+#add the indices to the detection object
+allDetections<-allDataObs
+allDetections$gridIndex<-siteInfo$gridIndex[match(allDetections$grid,siteInfo$grid)]
+allDetections$RapporteringsnivaN<-siteInfo$RapporteringsnivaN[match(allDetections$grid,siteInfo$grid)]
 
 bugs.data <- list(#For the state model
-                  n.Lines = length(unique(allData$cellID)),
+                  n.Lines = length(unique(siteInfo$grid)),
                   n.Years = length(unique(allData$Year)),
-                  n.Sites = length(unique(allData$Fylkesnavn)),
-                  n.Sites2 = length(unique(interaction(allData$Rapporteringsniva,allData$Fylkesnavn))),
-                  line = siteInfo$cellID,
-                  site = as.numeric(as.factor(siteInfo$Fylkesnavn)),
-                  site2 = as.numeric(as.factor(siteInfo$Rapporteringsniva)), 
+                  n.Sites = length(unique(siteInfo$Fylkesnavn)),
+                  n.Sites2 = length(unique(siteInfo$Rapporteringsniva)),
+                  line = siteInfo$gridIndex,
+                  site = siteInfo$FylkesnavnN,
+                  site2 = siteInfo$RapporteringsnivaN, 
                   year = (1:length(unique(allData$Year))),
                   NuIndivs = groupInfo,
                   TransectLength = transectLengths,
@@ -380,14 +424,11 @@ bugs.data <- list(#For the state model
                   detectionGroupSize = log(allDetections$totalIndiv+1),
                   GroupSize = allDetections$totalIndiv,
                   zeros.dist = rep(0,nrow(allDetections)),
-                  detectionLine = allDetections$cellID,
+                  n.LineD = length(unique(allDetections$grid)),
+                  detectionLine = allDetections$gridIndex,
                   detectionYear = as.numeric(as.factor(allDetections$Year)),
-                  detectionSite = as.numeric(as.factor(allDetections$Rapporteringsniva)),
-                  detectionSiteYear = allDetections$detectionSiteYear)
+                  detectionSite = allDetections$RapporteringsnivaN)
 
-#add lengths
-bugs.data$n.LineYear<-length(unique(bugs.data$detectionLineYear))
-bugs.data$n.SiteYear<-length(unique(bugs.data$detectionSiteYear))
 
 names(bugs.data)
 
@@ -398,7 +439,7 @@ names(bugs.data)
 ```{r}
 
 source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
-params <- c("int","line.d.sd","year.d.sd","Density")
+params <- c("int.d","line.d.sd","year.d.sd","Density")
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel.txt", n.thin=nt,
@@ -421,6 +462,57 @@ plot(mygrid)
 
 ```
 
+Get approximate transect coverage of each cell
+ESW is about 115m
+
+```{r}
+library(Rdistance)
+fit <- F.dfunc.estim(bugs.data$y, likelihood="halfnorm")#effective strip width is 118 m
+plot(fit)
+
+#add a buffer to all lines
+#get overlap
+plot(rsp)
+plot(Lines_spatial,add=T)
+
+#add buffer to the lines
+Line_spatial_Buffered<-gBuffer(Lines_spatial,byid=TRUE,width=115)
+gIntersection(Line_spatial_Buffered,rsp,byid=TRUE)
+
+sapply(Lines_spatial_buffered,function(x))
+
+
+rp <- raster::intersect(Lines_spatial,rsp)
+
+
+```
+
+
+Fit a detection only model
+```{r}
+source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/bugsFunctions.R')
+
+params <- c("b.df.0","b.group.size","predESW")
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
+out1 <- jags(bugs.data, inits=NULL, params, "linetransectModel_detection.txt", n.thin=nt,
+               n.chains=3, n.burnin=1000,n.iter=5000,parallel=T)
+
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+save(out1,file="out1_linetransectModel_detection.RData")
+traceplot(out1)
+
+```
+
+Get effective strip widths:
+
+```{r}
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+load("out1_linetransectModel_detection.RData")
+summary(out1$mean$predESW)
+esw<-getBUGSFits(out1,param="predsESW")
+```
+
 Now get the environmental information for these cells
 
 ```{r}
@@ -438,7 +530,19 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 ```
 
-Run model
+
+get effective strip widths
+```{r}
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
+load("esw.RData")
+
+#add to the bugs data object
+bugs.data$ESW.mean <- acast(esw,lineIndex~Year,value.var="mean")
+bugs.data$ESW.sd <- acast(esw,lineIndex~Year,value.var="sd")
+
+```
+
+Run model:
 
 ```{r}
 
@@ -454,3 +558,6 @@ setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-out
 traceplot(out1)
 
 ```
+
+
+
