@@ -1,3 +1,6 @@
+#using a m grid
+equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
+
 #get norway##############################################################
 
 library(raster)
@@ -5,217 +8,59 @@ library(maptools)
 library(rgeos)
 data(wrld_simpl)
 Norway<- subset(wrld_simpl,NAME=="Norway")
-plot(Norway)
 Norway <- gBuffer(Norway,width=1)
+Norway<-spTransform(Norway,crs(equalM))
+plot(Norway)
 
 ########################################################################
 
-#choose modelling resolution:
-
-#newres=1
-
-newres=0.05
-
-#########################################################################
-
-#get willow ptarmigan data - occurrence data
-
-tdir<-"C:/Users/diana.bowler/OneDrive - NINA/Alpine/SpeciesMapServices/Ptarmigan"
-lirype <- read.delim(paste(tdir,"DataExportFraArtskart.txt",sep="/"),skipNul=T,dec=",")
-summary(lirype$CoordinatePrecision)
-lirype <- subset(lirype, !CoordinatePrecision>10000)
-coordinates(lirype)<-c("Longitude","Latitude")
-plot(Norway)
-plot(lirype,add=T)
-#all points look pretty good!! few in the sea
-
-###############################################################
-#exclude Nov to March  - rock and willow both have white coats#
-###############################################################
-
-#overlay to the grid
-library(raster)
-mygrid<-raster(extent(Norway))
+#create grid
+newres=5000#5 km grid
+mygrid<-raster(extent(projectExtent(Norway,equalM)))
 res(mygrid)<-newres
 mygrid[]<-1:ncell(mygrid)
 plot(mygrid)
 gridTemp<-mygrid
+plot(Norway,add=T)
 
-#get grid number for each point
-lirype$grid<-extract(mygrid,lirype)
-
-#get number of points per grid cell
-library(plyr)
-gridSummary<-ddply(lirype@data,.(grid),summarise,nuRecs=length(NorskNavn))
-mygrid[]<-0
-mygrid[gridSummary$grid]<-gridSummary$nuRecs
-length(gridSummary$grid)==length(gridSummary$nuRecs)
-plot(mygrid)
-
-#plot for each year
-lirype<-subset(lirype,YearCollected>2006&YearCollected<2018)
-#gridSummary<-ddply(lirype@data,.(grid,YearCollected),summarise,nuRecs=length(NorskNavn))
-#sort(unique(gridSummary$YearCollected))
-#par(mfrow=c(3,4))
-#for(i in 2007:2017){
-#  mygrid[]<-0
-#  mygrid[gridSummary$grid[gridSummary$YearCollected==i]]<-gridSummary$nuRecs[gridSummary$YearCollected==i]
-#  plot(mygrid,main=i)
-#}
-
-#how many records per site are there, per year
-hist(gridSummary$nuRecs)
-gridSummary$RepeatedVisits<-sapply(gridSummary$nuRecs,function(x)ifelse(x>1,1,0))
-table(gridSummary$RepeatedVisits)
-#0    1 
-#4754 2173 
-
-##########################################################################
-
-#get data for all birds - as an effort layer
-
-tdir<-"C:/Users/diana.bowler/OneDrive - NINA/Alpine/SpeciesMapServices/Ptarmigan"
-lirypeDF <- read.delim(paste(tdir,"DataExportFraArtskart.txt",sep="/"),skipNul=T,dec=",",as.is=T)
-tdir<-"C:/Users/diana.bowler/OneDrive - NINA/Alpine/SpeciesMapServices/Birds"
-allbirds <- read.delim(paste(tdir,"DataExportFraArtskart.txt",sep="/"),skipNul=T,dec=",",as.is=T)
-allbirds <- rbind(allbirds,lirypeDF)
-unique(allbirds$Class)
-summary(allbirds$CoordinatePrecision)
-allbirds <- subset(allbirds, !CoordinatePrecision>10000)
-coordinates(allbirds)<-c("Longitude","Latitude")
-plot(Norway)
-plot(allbirds,add=T)
-#all points look pretty good!! few in the sea...
-
-#overlay to the grid
-library(raster)
-mygrid<-raster(extent(Norway))
-res(mygrid)<-newres
-mygrid[]<-1:ncell(mygrid)
-plot(mygrid)
-
-#get grid number for each point
-allbirds$grid<-extract(mygrid,allbirds)
+#########################################################################
 
 #identify all grid cells within the buffer region
+
 library(rgeos)
 mygridMask<-mask(mygrid,Norway)
 mygridMaskDF<-as.data.frame(mygridMask,xy=T)
-mygridMaskDF<-subset(mygridMaskDF,!is.na(layer))
-
-#survyed grids
-allbirds<-subset(allbirds,YearCollected>2006&YearCollected<2018)
-allbirds@data$Species<-apply(allbirds@data,1,function(x)paste(x["Genus"],x["Species"],sep=" "))
-allbirds_data<-data.frame(allbirds@data,allbirds@coords) 
-allbirds_data <- allbirds_data[,c("YearCollected","MonthCollected","DayCollected","grid","Species")]
-allbirds_data <- subset(allbirds_data,DayCollected!=0)
-all_data <- subset(allbirds_data,!is.na(grid))
+head(mygridMaskDF)
+plot(mygridMask)
 
 #########################################################################
 
 #get info on administrative names for the grid
 library(rgdal)
+
+#make both spatial objects in the same crs
 NorwayADM<-readOGR(dsn="C:/Users/diana.bowler/OneDrive - NINA/Alpine/NOR_adm",layer="NOR_adm1")
-unique(NorwayADM$VARNAME_1)
-crs(NorwayADM)
-mygridDF<-as.data.frame(mygrid,xy=T)
-mygridPoints<-mygridDF
+NorwayADM<-spTransform(NorwayADM,crs(equalM))
+mygridPoints<-mygridMaskDF
 coordinates(mygridPoints)<-c("x","y")
 proj4string(mygridPoints)<-crs(NorwayADM)
+
+#check they overlap
+plot(mygridPoints)
+plot(NorwayADM,add=T,col="red")
+
+#extract the data
 myAdm<-over(mygridPoints,NorwayADM)
-myAdm$grid<-mygridPoints@data$layer
+myAdm$grid<-mygridPoints$layer
 myAdm$VARNAME_1<-as.character(myAdm$VARNAME_1)
 myAdm$VARNAME_1[is.na(myAdm$VARNAME_1)]<-"outside"
+myAdm<-subset(myAdm,!is.na(grid))
 table(myAdm$VARNAME_1)
+
+#check the results
+mygrid[]<-0
 mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$VARNAME_1))
 plot(mygrid)#looks good!
-
-#########################################################################
-
-#get list length info
-
-#get total number of species ever seen per grid
-gridRichness <- ddply(all_data,.(grid),summarise,nuSpecies=length(unique(Species[!is.na(Species)])),nuRecs=length(Species[!is.na(Species)]))
-mygrid[]<-0
-gridRichness$nuRecs[gridRichness$nuRecs>quantile(gridRichness$nuRecs,0.975)]<-quantile(gridRichness$nuRecs,0.975)
-mygrid[gridRichness$grid]<-gridRichness$nuRecs/gridRichness$nuSpecies
-plot(mygrid)
-mygrid[gridRichness$grid]<-gridRichness$nuRecs
-plot(mygrid)
-
-#add list length of all birds on each sampling visit
-listlengthDF<-ddply(all_data,.(YearCollected,MonthCollected,DayCollected,grid),summarise,
-                    L = length(unique(Species[!is.na(Species)])), #number of species
-                    L2 = length(Species[!is.na(Species)]), #number of records
-                    L3 = L2/L) #records per species
-
-#sort out occupancy matrix of ptarmigan
-listlengthDF$visit<-paste(listlengthDF$YearCollected,listlengthDF$MonthCollected,
-                          listlengthDF$DayCollected,listlengthDF$grid,sep="-")
-lirype$visit<-paste(lirype$YearCollected,lirype$MonthCollected,
-                    lirype$DayCollected,lirype$grid,sep="-")
-listlengthDF$y<-sapply(listlengthDF$visit,function(x)ifelse(x%in%lirype$visit,1,0))
-
-sum(listlengthDF$y,na.rm=T)
-#10927
-
-############################################################################
-
-#add NAs for all years and grids
-newgrid<-expand.grid(YearCollected=unique(listlengthDF$YearCollected),
-                     grid=sort(unique(mygridMaskDF$layer)))
-listlengthDF<-merge(listlengthDF,newgrid,by=c("YearCollected","grid"),all=T)
-summary(listlengthDF)
-table(listlengthDF$grid,listlengthDF$YearCollected)
-
-#########################################
-#adding non-detections??
-#listlengthDF$L[is.na(listlengthDF$L)]<-0
-#listlengthDF$y[listlengthDF$L==0]<-0
-#########################################
-#######################################################################
-
-#hist(listlengthDF$L)
-summary(listlengthDF$L)
-#cap list length
-table(listlengthDF$L)
-listlengthDF$L[listlengthDF$L>quantile(listlengthDF$L,0.975,na.rm=T)]<-quantile(listlengthDF$L,0.975,na.rm=T)
-
-#other measures
-#table(listlengthDF$L3)
-hist(listlengthDF$L3)
-#hist(log(listlengthDF$L3+1))
-listlengthDF$L2[listlengthDF$L2>quantile(listlengthDF$L2,0.975,na.rm=T)]<-quantile(listlengthDF$L2,0.975,na.rm=T)
-listlengthDF$L3[listlengthDF$L3>quantile(listlengthDF$L3,0.975,na.rm=T)]<-quantile(listlengthDF$L3,0.975,na.rm=T)
-
-#add species richnes for each grid
-listlengthDF$nuSpecies <- gridRichness$nuSpecies[match(listlengthDF$grid,gridRichness$grid)]
-summary(listlengthDF$nuSpecies)
-
-#order data by site and year
-listlengthDF<-arrange(listlengthDF,YearCollected,grid)
-
-#add indices
-listlengthDF$siteIndex<-as.numeric(as.factor(listlengthDF$grid))
-listlengthDF$yearIndex<-as.numeric(as.factor(listlengthDF$YearCollected))
-
-#add adm
-listlengthDF$adm<-myAdm$VARNAME_1[match(listlengthDF$grid,myAdm$grid)]
-table(listlengthDF$adm)
-listlengthDF$adm2<-as.numeric(as.factor(listlengthDF$adm))
-
-#############################################################################
-
-#for environmental data
-
-bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
-                  nyear = length(unique(listlengthDF$yearIndex)),
-                  nvisit = nrow(listlengthDF),
-                  grid = listlengthDF$grid,
-                  site = listlengthDF$siteIndex,
-                  year = listlengthDF$yearIndex,
-                  L = listlengthDF$L - median(listlengthDF$L),
-                  y = listlengthDF$y)
 
 ########################################################################
 
@@ -225,22 +70,23 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
 
 getEnvironData<-function(myraster,mygridTemp){
   require(maptools)
+  require(plyr)
   
   #crop raster to Norway extent
   rasterCRS<-crs(myraster)
-  Norway<-spTransform(Norway,rasterCRS)
-  myraster<-crop(myraster,extent(Norway))
+  NorwayB<-spTransform(Norway,rasterCRS)
+  myraster<-crop(myraster,extent(NorwayB))
   
-  #convert raster into points and convert to lon lat
+  #convert raster into points and convert
   myrasterDF<-as.data.frame(myraster,xy=T)
   names(myrasterDF)[3]<-"myraster"
   coordinates(myrasterDF)<-c("x","y")
   proj4string(myrasterDF)<-rasterCRS
-  myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+  myrasterDF<-spTransform(myrasterDF,crs(equalM))
   
   #get general grid
   mygrid<-gridTemp
-  projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
+  projection(mygrid)<- equalM
   
   #get mean myraster values per grid cell
   mygrid[]<-1:ncell(mygrid)
@@ -267,55 +113,6 @@ plotBUGSData<-function(myvar){
   plot(mygrid)
 }
 
-plotZ<-function(model,param="z"){
-  zSummary<-data.frame(model$summary[grepl(param,row.names(model$summary)),])
-  zSummary$ParamNu <- as.character(sub(".*\\[([^][]+)].*", "\\1", row.names(zSummary)))
-  zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
-  zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
-  zSummary$grid<-listlengthDF$grid[match(zSummary$Site,listlengthDF$siteIndex)]
-  #zSummary_year<-subset(zSummary,Year==11)
-  
-  #predicted occupancy across all years
-  zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean))
-  #plot mean prop occupancy
-  par(mfrow=c(1,1))
-  mygrid[]<-0
-  mygrid[zSummary_year$grid]<-zSummary_year$prop
-  plot(mygrid)
-  plot(Norway,add=T)
-}
-
-plotZerror<-function(model){
-  zSummary<-data.frame(model$summary[grepl("z",row.names(model$summary)),])
-  zSummary$ParamNu <- as.character(sub(".*\\[([^][]+)].*", "\\1", row.names(zSummary)))
-  zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
-  zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
-  zSummary$grid<-listlengthDF$grid[match(zSummary$Site,listlengthDF$siteIndex)]
-  
-  #predicted occupancy across all years
-  zSummary_year<-ddply(zSummary,.(grid),summarise,prop=mean(mean),prop_sd=mean(sd),prop_cov=prop_sd/prop)
-  
-  #plot sd
-  par(mfrow=c(2,1))
-  mygrid[]<-0
-  mygrid[zSummary_year$grid]<-zSummary_year$prop_sd
-  plot(mygrid)
-  plot(Norway,add=T)
-  mygrid[]<-0
-  #plot cov
-  mygrid[zSummary_year$grid]<-zSummary_year$prop_cov
-  plot(mygrid)
-  plot(Norway,add=T)
-}
-
-getParam<-function(model,param="z"){
-  zSummary<-data.frame(model$summary[grepl(param,row.names(model$summary)),])
-  zSummary$ParamNu <- as.character(sub(".*\\[([^][]+)].*", "\\1", row.names(zSummary)))
-  zSummary$Site<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][1])
-  zSummary$Year<-sapply(zSummary$ParamNu,function(x)strsplit(x,",")[[1]][2])
-  return(zSummary)
-}
-
 #######################################################################
 
 #Code to get environmental data:
@@ -329,15 +126,10 @@ out<-getEnvironData(access,mygrid)
 #check data
 hist(out$myraster)
 summary(out$myraster)
-
-#Add to the bugs data
-bugs.data$access = out$myraster[match(listlengthDF$grid,out$grid)]
-
-#plotting
-plot(access)
-plotBUGSData("access")
+outAccess<-out
 
 rm(access)
+rm(out)
 
 ######################################################################################################
 
@@ -364,7 +156,6 @@ plot(habitatRaster)
 
 #Set NAs for irrelevant habitats
 habitatRaster[habitatRaster>24] <- NA
-habitatRaster[habitatRaster==22] <- NA
 habitatRaster[habitatRaster==0] <- NA
 plot(habitatRaster)
 
@@ -373,17 +164,17 @@ plot(habitatRaster)
 myraster<-habitatRaster
 rasterCRS<-crs(myraster)
 
-#convert raster into points and convert to lon lat
+#convert raster into points and convert 
 myrasterDF<-as.data.frame(myraster,xy=T)
 names(myrasterDF)[3]<-"myraster"
 myrasterDF<-subset(myrasterDF,!is.na(myraster))
 coordinates(myrasterDF)<-c("x","y")
 proj4string(myrasterDF)<-rasterCRS
-myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
-
+myrasterDF<-spTransform(myrasterDF,crs(equalM))
+                        
 #get general grid
 mygrid<-gridTemp
-projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
+projection(mygrid)<-CRS(equalM) 
 
 #get myraster values per grid cell
 mygrid[]<-1:ncell(mygrid)
@@ -404,50 +195,34 @@ myrasterDF<-subset(myrasterDF,raster!=0)
 myrasterDF$Forest<-0
 myrasterDF$Forest[myrasterDF$raster%in%c(1:8)]<-myrasterDF$count[myrasterDF$raster%in%c(1:8)]
 myrasterDF$Open<-0
-myrasterDF$Open[myrasterDF$raster%in%c(9:21)]<-myrasterDF$count[myrasterDF$raster%in%c(9:21)]
+myrasterDF$Open[myrasterDF$raster%in%c(9,10,12:21)]<-myrasterDF$count[myrasterDF$raster%in%c(9,10,12:21)]
 myrasterDF$Top<-0
 myrasterDF$Top[myrasterDF$raster%in%c(14,17)]<-myrasterDF$count[myrasterDF$raster%in%c(14,17)]
 #Heather-rich alpine ridge vegetation, Fresh heather and dwarf-shrub communities
+myrasterDF$PrefOpen[myrasterDF$raster%in%c(10,17,18)]<-myrasterDF$count[myrasterDF$raster%in%c(10,17,18)]
+myrasterDF$PrefClosed[myrasterDF$raster%in%c(6,7)]<-myrasterDF$count[myrasterDF$raster%in%c(6,7)]
 myrasterDF$Bottom<-0
 myrasterDF$Bottom[myrasterDF$raster%in%c(23:24)]<-myrasterDF$count[myrasterDF$raster%in%c(23:24)]
 #Agricultural areas, Cities and built-up areas
 myrasterDF$Agriculture[myrasterDF$raster%in%c(23)]<-myrasterDF$count[myrasterDF$raster%in%c(23)]
 #Agricultural areas
-myrasterDF<-ddply(myrasterDF,.(grid),summarise,Forest=sum(Forest,na.rm=T),Open=sum(Open,na.rm=T),
-                  Bottom=sum(Bottom,na.rm=T),Top=sum(Top,na.rm=T),Agriculture=sum(Agriculture,na.rm=T))
+
+#aggregate
+myrasterDF<-ddply(myrasterDF,.(grid),summarise,Forest=sum(Forest,na.rm=T),
+                  Open=sum(Open,na.rm=T),
+                  Bottom=sum(Bottom,na.rm=T),
+                  Top=sum(Top,na.rm=T),
+                  PrefOpen=sum(PrefOpen,na.rm=T),
+                  PrefClosed=sum(PrefClosed,na.rm=T),
+                  Agriculture=sum(Agriculture,na.rm=T))
 
 
 #Simplify into factors
-myrasterDF$Habitat<-apply(myrasterDF,1,function(x)ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
+myrasterDF$Habitat<-apply(myrasterDF,1,
+                          function(x)
+                            ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
                                                          "Forest","Open"))
 myrasterDF$Habitat[myrasterDF$Top>150]<-"Top"
-sum(is.na(myrasterDF$Habitat))#none!
-
-#Add to the bugs data
-bugs.data$habitat = myrasterDF$Habitat[match(listlengthDF$grid,myrasterDF$grid)]
-bugs.data$Forest = myrasterDF$Forest[match(listlengthDF$grid,myrasterDF$grid)]
-bugs.data$Open = myrasterDF$Open[match(listlengthDF$grid,myrasterDF$grid)]
-bugs.data$Top = myrasterDF$Top[match(listlengthDF$grid,myrasterDF$grid)]
-bugs.data$Agriculture = myrasterDF$Agriculture[match(listlengthDF$grid,myrasterDF$grid)]
-
-table(bugs.data$habitat)
-sum(is.na(bugs.data$habitat))
-#132
-
-unique(listlengthDF$grid[is.na(bugs.data$habitat)])
-#130!
-
-# get coordinates of grid cell with NA habitat
-emptygrids<-unique(listlengthDF$grid[is.na(bugs.data$habitat)])
-pts <- data.frame(xyFromCell(mygrid,emptygrids))
-coordinates(pts) <- c("x","y")
-proj4string(pts) <- crs("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
-pts<-spTransform(pts,crs(habitatRaster))
-plot(habitatRaster)
-plot(pts,col="red",add=T)#the points are in the sea!!!
-
-rm(habitatRaster)
-rm(myraster)
 
 ######################################################################################################
 
@@ -474,16 +249,9 @@ temp_bio1<-aggregate(temp_bio1,fact=4,fun=mean)
 #extract the data
 out<-getEnvironData(temp_bio1,mygrid)
 
-#check data
-hist(out$myraster)
-summary(out$myraster)
-
-#Add to the bugs data
-bugs.data$bio1 = out$myraster[match(listlengthDF$grid,out$grid)]
-summary(bugs.data$bio1)
-plotBUGSData("bio1")
-
+out_Bio1<-out
 rm(temp_bio1)
+rm(out)
 
 ##############
 #maximum temp#
@@ -491,28 +259,41 @@ rm(temp_bio1)
 temp_bio5<-raster("eurolst_clim.bio05.tif")
 temp_bio5<-aggregate(temp_bio5,fact=4,fun=mean)
 out<-getEnvironData(temp_bio5,mygrid)
-bugs.data$bio5 = out$myraster[match(listlengthDF$grid,out$grid)]
-summary(bugs.data$bio5)
-plotBUGSData("bio5")
+
+out_Bio5<-out
 rm(temp_bio5)
+rm(out)
 
 #minimum temp
 temp_bio6<-raster("eurolst_clim.bio06.tif")
 temp_bio6<-aggregate(temp_bio6,fact=4,fun=mean)
 out<-getEnvironData(temp_bio6,mygrid)
-bugs.data$bio6 = out$myraster[match(listlengthDF$grid,out$grid)]
-summary(bugs.data$bio6)
-plotBUGSData("bio6")
+
+out_Bio6<-out
+rm(temp_bio6)
+rm(out)
+
+###################################################################
+#combine all
+
+#temp data
+names(out_Bio1)[2]<-"bio1"
+names(out_Bio5)[2]<-"bio5"
+names(out_Bio6)[2]<-"bio6"
+out_Bio<-cbind(out_Bio1,bio5=out_Bio5[,2],bio6=out_Bio6[,2])
+
+#combine others
+varDF<-merge(out_Bio,myrasterDF,by="grid")
+varDF<-merge(varDF,myAdm,by="grid",all.x=T)
+varDF<-subset(varDF,is.finite(bio1))
+
+save(varDF,file="varDF_missing_5km.RData")
 
 #####################################################################################################
 
 #Examine correlations among bugs variables
-
-varDF<-data.frame(do.call(cbind,bugs.data[9:length(names(bugs.data))]),stringsAsFactors = FALSE)
-varDF[,-which(names(varDF)=="habitat")]<-sapply(varDF[,-which(names(varDF)=="habitat")],as.numeric)
-save(varDF,file="varDF_missing_5km.RData")
 library(GGally)
-ggpairs(varDF)
+ggpairs(varDF[,2:11])
 table(varDF$habitat)
 
 #bio1 and bio6 strongly related
@@ -549,21 +330,33 @@ varDF<-subset(varDF,!grid%in%NAgrid)
 setwd( "C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling")
 #later loading
 load("varDF_missing_5km.RData")
-varDF$grid<-bugs.data$grid
-NAgrid<-unique(c(varDF$grid[is.na(varDF$habitat)],varDF$grid[is.na(varDF$bio1)]))
+NAgrid<-unique(c(varDF$grid[is.na(varDF$Habitat)],varDF$grid[is.na(varDF$bio1)]))
 varDF<-subset(varDF,!grid%in%NAgrid)
 nrow(varDF)
-length(unique(varDF$grid))#28102
+length(unique(varDF$grid))#16064
+
+#check coverage
+mygrid[]<-0
+mygrid[varDF$grid]<-varDF$bio1
+plot(mygrid)
+#looks good
+mygrid[]<-0
+mygrid[varDF$grid]<-varDF$PrefOpen
+plot(mygrid)
+#ok
+mygrid[]<-0
+mygrid[varDF$grid]<-varDF$bio6
+plot(mygrid)
+#good!
 
 #####################################################################################################
 
 #also get alpine data
 
-load("alpineData_5km.RData")
-#1     2     3     4 
-#14928  8310  2313   589
+load("alpineData_5kmGrid.RData")
 
 #plot it
+library(ggplot2)
 qplot(x,y,data=alpineData,color=tree_line)
 qplot(x,y,data=alpineData,color=elevation)
 qplot(x,y,data=alpineData,color=alpine_habitat)
@@ -577,6 +370,7 @@ alpineData$alpine_habitat3 <- sapply(alpineData$alpine_habitat,function(x)ifelse
 alpineData$alpine_habitat4 <- sapply(alpineData$alpine_habitat,function(x)ifelse(x==4,1,0))
 
 #aggregate to site level
+library(plyr)
 alpineData <- ddply(alpineData,.(site),summarise,
                     tree_line_position = median(tree_line_position,na.rm=T),
                     alpine_habitat1 = mean(alpine_habitat1,na.rm=T), 
@@ -598,6 +392,10 @@ varDF<-subset(varDF,!grid%in%NAgrid)
 alpineData<-subset(alpineData,!grid%in%NAgrid)
 varDF<-merge(varDF,alpineData,by="grid",all.x=T,sort=FALSE)
 summary(varDF)
-length(unique(varDF$grid))#28081
+length(unique(varDF$grid))#15636
+mygrid[]<-0
+mygrid[varDF$grid]<-varDF$bio6
+plot(mygrid)
+
 save(varDF,file="varDF_allEnvironData_5km.RData")
 ########################################################################################
