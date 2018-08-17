@@ -58,7 +58,7 @@ getBUGSFits<-function(model,param="Density"){
   modelSummary<-merge(modelSummary,siteInfo,by.x="lineIndex",by.y="LinjeID")
   modelSummary$Fylkesnavn <- sapply(as.character(modelSummary$Line),function(x)strsplit(x,"_")[[1]][1])
   }else{
-    modelSummary<-merge(modelSummary,siteInfo,by.x="lineIndex",by.y="cellID")  
+    modelSummary<-merge(modelSummary,siteInfo,by.x="lineIndex",by.y="gridIndex")  
   }
   
   names(modelSummary)[c(4,6)]<-c("lower","upper")
