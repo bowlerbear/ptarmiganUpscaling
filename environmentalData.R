@@ -39,7 +39,7 @@ plot(mygridMask)
 library(rgdal)
 
 #make both spatial objects in the same crs
-NorwayADM<-readOGR(dsn="C:/Users/diana.bowler/OneDrive - NINA/Alpine/NOR_adm",layer="NOR_adm1")
+NorwayADM<-readOGR(dsn="C:/Users/diana.bowler/OneDrive - NINA/Alpine/NOR_adm",layer="NOR_adm2")
 NorwayADM<-spTransform(NorwayADM,crs(equalM))
 mygridPoints<-mygridMaskDF
 coordinates(mygridPoints)<-c("x","y")
@@ -52,14 +52,16 @@ plot(NorwayADM,add=T,col="red")
 #extract the data
 myAdm<-over(mygridPoints,NorwayADM)
 myAdm$grid<-mygridPoints$layer
-myAdm$VARNAME_1<-as.character(myAdm$VARNAME_1)
-myAdm$VARNAME_1[is.na(myAdm$VARNAME_1)]<-"outside"
+myAdm$adm<-as.character(myAdm$NAME_1)
+myAdm$adm[is.na(myAdm$adm)]<-"outside"
+myAdm$adm2<-as.character(myAdm$NAME_2)
+myAdm$adm2[is.na(myAdm$adm2)]<-"outside"
 myAdm<-subset(myAdm,!is.na(grid))
-table(myAdm$VARNAME_1)
+table(myAdm$adm)
 
 #check the results
 mygrid[]<-0
-mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$VARNAME_1))
+mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$adm))
 plot(mygrid)#looks good!
 
 ########################################################################
