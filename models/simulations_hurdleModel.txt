@@ -1,0 +1,81 @@
+
+      model {
+      
+      #Model to predict site suitability
+      ##################################
+      
+      # Priors
+      mean.psi ~ dunif(0, 1)       # Occupancy intercept on prob. scale
+      int.psi <- cloglog(mean.psi)     # Occupancy intercept
+      
+      
+      #random line effect on occupancy
+      for(i in 1:n.o.lines){
+      random.o.line[i] ~ dnorm(0,random.o.line.tau)
+      }
+      random.o.line.tau <- pow(random.o.line.sd,-2)
+      random.o.line.sd ~ dunif(0,10)
+      
+      #site effects on occupancy
+      for(i in 1:n.site){
+      random.o.site[i] ~ dnorm(0,random.o.site.tau)
+      }
+      random.o.site.tau <- pow(random.o.site.sd,-2)
+      random.o.site.sd ~ dunif(0,10)
+      
+      for(i in 1:n.site2){
+      random.o.site2[i] ~ dnorm(0,random.o.site2.tau)
+      }
+      random.o.site2.tau <- pow(random.o.site2.sd,-2)
+      random.o.site2.sd ~ dunif(0,10)
+      
+      
+      # State model
+      for (i in 1:n.o.lines){ 
+      PA[i] ~ dbern(muZ[i]) 
+        cloglog(muZ[i]) <- int.psi + random.o.line[i] + random.o.site[site[i]] + random.o.site2[site2[i]] 
+      }   
+      
+      
+      #Model the abundance at line transect grids 
+      ##############################################################
+      
+      #intercept
+      mean.d ~ dunif(0,100)
+      int.d <- log(mean.d)    
+      
+      #random line effect on abundance
+      for(i in 1:n.a.lines){
+      random.a.line[i] ~ dnorm(0,random.a.line.tau)
+      }
+      random.a.line.tau <- pow(random.a.line.sd,-2)
+      random.a.line.sd ~ dunif(0,10)
+      
+      #site effects on occupancy
+      for(i in 1:n.site){
+      random.a.site[i] ~ dnorm(0,random.a.site.tau)
+      }
+      random.a.site.tau <- pow(random.a.site.sd,-2)
+      random.a.site.sd ~ dunif(0,10)
+      
+      for(i in 1:n.site2){
+      random.a.site2[i] ~ dnorm(0,random.a.site2.tau)
+      }
+      random.a.site2.tau <- pow(random.a.site2.sd,-2)
+      random.a.site2.sd ~ dunif(0,10)
+      
+      #State model to observed data
+      for(j in 1:n.a.lines){
+      abund[j] ~ dpois(Density[j])
+      log(Density[j]) <- int.d +  random.a.line[j] + random.a.site[site[j]] + random.a.site2[site2[j]] 
+      }
+      
+      #Predict realized abundance, across all sites, i.e. suitability * abundance
+      for(j in 1:n.a.lines){
+      realAbund[j] ~ dpois(Density[j] * muZ[j])
+      }
+      
+      totAbund<-sum(realAbund)
+      
+      }
+      

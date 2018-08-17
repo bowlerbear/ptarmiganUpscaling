@@ -1,6 +1,7 @@
 ####################################################################################################
 source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/formattingArtDatenBank_missing_data.R')
 ###################################################################################################
+
 oldlistlengthDF<-listlengthDF
 
 #collapse data to site-level rather than site/year level (too many NAs and we arent interested in year..)
@@ -53,9 +54,18 @@ table(listlengthDF$visitNu)
 #subset to 13 (median)
 listlengthDF<-subset(listlengthDF,visitNu<=13)
 
+###################################################################"
+
+#sample a random sample of the grid
+
+sampledSites<-sample(unique(listlengthDF$grid),1000)
+listlengthDF<-subset(listlengthDF,grid%in%sampledSites)
+
 #####################################################################
 
 #order data by site and year
+listlengthDF$siteIndex<-as.numeric(factor(listlengthDF$grid))
+listlengthDF$yearIndex<-as.numeric(factor(listlengthDF$year))
 listlengthDF<-arrange(listlengthDF,siteIndex,yearIndex)
 
 #extract site data
@@ -70,6 +80,22 @@ siteInfo<-unique(listlengthDF[,c("siteIndex","admN","grid","admN2")])
 listlengthDF$siteyearIndex<-as.numeric(factor(interaction(listlengthDF$siteIndex,listlengthDF$yearIndex)))
 
 ###################################################################################################
+
+#estimate detection probability by hand:
+
+detProb<-ddply(listlengthDF,.(grid),summarise,nuSurveys=length(y[!is.na(y)]),
+                                              nuObs = length(y[y==1&!is.na(y)]))
+detProb<-subset(detProb,nuObs>0)
+hist(detProb$nuObs/detProb$nuSurveys)
+mean(detProb$nuObs/detProb$nuSurveys)#0.3
+
+#plot the distribution of detections
+mygrid[]<-0
+mygrid[detProb$grid]<-detProb$nuObs/detProb$nuSurveys
+plot(mygrid,main="Detection probs")
+
+###################################################################################################
+
 #fit as glm with explanatory variables
 
 #add to the dataset, the coordinates of the grid
@@ -198,61 +224,37 @@ source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
 ##########################################################################################
 
 #costant detection proability
-params <- c("mean.p","mean.psi","sd.s.y")
+params <- c("mean.p","mean.psi")
 
 #specify model structure
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant_site.txt", n.thin=10,
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant_site.txt", n.thin=2,
              n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km_basic0.RData")
+save(out1,file="out1_OM_missing_5km_basic0_site.RData")
 
 ############################################################################################
+
 #run model with random effects on adm
 
 #specify parameters to monitor
-params <- c("psi.fs","sd.y","sd.s","mean.p","mean.psi","random.adm.sd","random.adm")
+params <- c("mean.p","mean.psi","random.adm.sd","random.adm2.sd")
 
 #specify model structure
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=5,
-             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
-
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km_basic.RData")
-
-############################################################################################
-
-#run model with random effects on adm and year and site
-
-#specify parameters to monitor
-params <- c("psi.fs","sd.y","sd.s","mean.p","mean.psi","random.adm.sd","random.adm")
-
-#specify model structure
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
+out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant_site.txt", n.thin=5,
              n.chains=3, n.burnin=600,n.iter=2000,parallel=T)
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km_basic2.RData")
+save(out1,file="out1_OM_random_missing_5km_basic_test.RData")
 
-#include year on the detection probability
-
-#run model with random effects on adm
-
-#specify parameters to monitor
-params <- c("int","psi.fs","dtype.p","mu.lp","a","random.adm.sd","alpha.p")
-
-#specify model structure
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
-             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
-
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km1.RData")
+############################################################################################
 
 #include other covariates on detection
+
+#number of sampling days
+#listlength per date
 
 #specify parameters to monitor
 params <- c("int","psi.fs","dtype.p","mu.lp","beta","a","d.tree","d.tree2")
@@ -264,33 +266,6 @@ out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n
 
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
 save(out1,file="out1_OM_random_missing_5km_det.RData")
-#d.type effect is negative!!
-
-#just elevation effect on detection (wasnt scaled)
-
-#specify parameters to monitor
-params <- c("int","psi.fs","mu.lp","beta","a","int.d","d.tree","d.tree2")
-
-#specify model structure
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
-             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
-
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km_det2.RData")
-
-#elevation effect and L2/L
-
-#specify parameters to monitor
-params <- c("int","psi.fs","mu.lp","beta","a","int.d","dtype.p","d.tree","d.tree2","random.adm.sd")
-
-#specify model structure
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=10,
-             n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
-
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km_det3.RData")
 
 ########################################################################################
 
@@ -319,81 +294,3 @@ plotZerror(out2)
 
 ##########################################################################################
  
-#also using jagam
-
-#fit as gam
-library(mgcv)
-gam1 <- gam(species~ 1 + s(x, y,k=10), 
-                    data=varDF, 
-                    family="binomial")
-
-#plot it
-varDF$fits<-gam1$fitted.values
-library(ggplot2)
-ggplot(varDF)+
-  geom_point(aes(x,y,colour=fits),shape=15,size=rel(4))+
-  scale_colour_gradient(low="blue",high="red")+
-  geom_point(data=subset(varDF,species==1),aes(x,y))
-
-
-#Use the JAGAM function to get the BUGS code for the spline
-#in the BUGS model
-jags.ready <- jagam(species ~ 1 + s(x, y,k=10), 
-                    data = varDF, 
-                    family="binomial", 
-                    sp.prior="log.uniform",
-                    file="jagam.txt")
-
-#get the data bits we need from jags data
-bugs.data$X = jags.ready$jags.data$X
-bugs.data$S1 = jags.ready$jags.data$S1
-bugs.data$zero = jags.ready$jags.data$zero
-
-#specify parameters to monitor
-params <- c("dtype.p","mu.lp","rho")
-
-#run model
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_JAGAM.txt", n.thin=nt,
-             n.chains=3, n.burnin=10000,n.iter=50000)
-
-traceplot(out1)
-print(out1,2)
-
-#########################################################################################
-
-#explore detection prob by hand
-
-#per year - for each line, what fraction of surveys had a ptarmigan in it
-#get rid of NAs
-
-listlengthDF_NAfree<-subset(listlengthDF,!is.na(visit))
-propSuccess<-ddply(listlengthDF_NAfree,.(grid,adm,adm2,YearCollected),
-                   summarise,
-                   propY=ifelse(length(y)>1,mean(y),NA),#want to calculate it only when there are repeat visits
-                   meanL=mean(L),
-                   meanL2=mean(L2),
-                   meanL3=mean(L3))
-propSuccess<-subset(propSuccess,!is.na(propY))
-
-hist(propSuccess$propY)#very all or nothing
-mean(propSuccess$propY[propSuccess$propY>0])#0.86
-
-#look at relationship
-library(ggplot2)
-library(cowplot)
-q1<-qplot(meanL,propY,data=propSuccess)#negative relationship
-q2<-qplot(meanL2,propY,data=propSuccess)#negative relationship
-q3<-qplot(meanL3,propY,data=propSuccess)#more positive
-plot_grid(q1,q2,q3)
-
-
-#plot in relation to site covariates
-propSuccess<-merge(propSuccess,listlengthDF_SiteCovs,by=c("grid","adm","adm2","site"))
-q1<-qplot(tree_line_position,propY,data=propSuccess)#quadratic relationship
-q2<-qplot(access,propY,data=propSuccess)#positivee??
-q3<-qplot(bio1,propY,data=propSuccess)#negative relationship
-plot_grid(q1,q2,q3)
-
-########################################################################################
-
