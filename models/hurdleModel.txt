@@ -1,7 +1,4 @@
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-# Specify model in BUGS language
-sink("hurdleModel.txt")
-cat("
+
     model {
     
     #Model to predict site suitability
@@ -35,16 +32,7 @@ cat("
     random.adm2.tau <- pow(random.adm2.sd,-2)
     random.adm2.sd ~ dunif(0,10)
 
-    #random year effect
-    for(i in 1:nyear){
-      random.o.year[i] ~ dnorm(0,random.o.year.tau)
-    }
-    random.o.year.tau <- pow(random.o.year.sd,-2)
-    random.o.year.sd ~ dunif(0,10)
-
-
-    #adm effects on detection:
-
+    #adm effects on detection
     for(i in 1:n.adm){
       random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
     }
@@ -52,18 +40,10 @@ cat("
     random.det.adm.sd ~ dunif(0,10)
     
     for(i in 1:n.adm2){
-      random.det.adm2[i] ~ dnorm(0,random.det.adm2.tau)
+    random.det.adm2[i] ~ dnorm(0,random.det.adm2.tau)
     }
     random.det.adm2.tau <- pow(random.det.adm2.sd,-2)
     random.det.adm2.sd ~ dunif(0,10)
-
-    #random year effect
-    for(i in 1:nyear){
-      random.det.year[i] ~ dnorm(0,random.det.year.tau)
-    }
-    random.det.year.tau <- pow(random.det.year.sd,-2)
-    random.det.year.sd ~ dunif(0,10)
-
 
     #other covariates
     beta.e  ~ dnorm(0,0.01)
@@ -85,9 +65,8 @@ cat("
     
       z[i,t] ~ dbern(muZ[i,t]) 
     
-      logit(muZ[i,t]) <- int.psi + random.site[i] + random.adm[adm[i]] +
-                          random.adm2[adm2[i]] + random.o.year[t]
-                          #inprod(beta[],occDM[i,]) 
+      logit(muZ[i,t]) <- int.psi + random.site[i] + random.adm[adm[i]] + random.adm2[adm2[i]] 
+      #inprod(beta[],occDM[i,]) 
       }
     }   
     
@@ -99,7 +78,7 @@ cat("
       Py[j]<- z[site[j],year[j]]*p[j] #probability to detect = prob of occ * prob of detection
     
       #detection model:
-      logit(p[j]) <-  int.p + beta.e * Effort[j] + beta.e2 * Effort2[j] + random.det.year[year[j]]
+      logit(p[j]) <-  int.p + beta.e * Effort[j] + beta.e2 * Effort2[j] 
     #random.det.adm[det.adm[j]]
     #random.det.adm2[det.adm2[j]]
     #inprod(beta.det[],occDM[site[j],])
@@ -143,12 +122,7 @@ cat("
     random.line.adm2.tau <- pow(random.line.adm2.sd,-2)
     random.line.adm2.sd ~ dunif(0,10)
 
-    for(i in 1:n.YearsLT){
-      random.line.year[i] ~ dnorm(0,random.line.year.tau)
-    }
-    random.line.year.tau <- pow(random.line.year.sd,-2)
-    random.line.year.sd ~ dunif(0,10)
-
+    
     #Work out the fraction of the both that was surveyed
     ESW.tauLT <- pow(ESW.sdLT,-2)
     for(j in 1:n.LinesLT){
@@ -170,9 +144,8 @@ cat("
     #State model to observed data
     for(j in 1:n.LinesLT){
       for(t in 1:n.YearsLT){
-          log(Density[j,t]) <- int.d + random.line.site[j] + random.line.adm[siteLT[j]] + 
-                                random.line.adm2[site2LT[j]] + random.line.year[t]
-                              #inprod(beta.occupancy[],occDM_Occupancy[j,])
+          log(Density[j,t]) <- int.d + random.line.site[j] + random.line.adm[siteLT[j]] + random.line.adm2[site2LT[j]]
+      #inprod(beta.occupancy[],occDM_Occupancy[j,])
       }
     }
     
@@ -190,5 +163,4 @@ cat("
     totAbund<-sum(realAbund)
 
     }
-    ",fill = TRUE)
-sink()
+    

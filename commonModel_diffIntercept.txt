@@ -1,0 +1,28 @@
+
+      model{
+      
+      #common effect of forest cover
+      for(i in 1:nsite){
+        eta[i] <- betaCombined * fc[i] 
+      }
+      betaCombined ~ dnorm(0,0.001)
+      
+  
+      #Link to presence/absence data:
+      for(i in 1:nsite1){
+          PA[i] ~ dbern(psi[i])
+          cloglog(psi[i]) <- intPA + eta[site1[i]]
+      }
+      meanPA ~ dunif(0,1)
+      intPA <- cloglog(meanPA)
+      
+      #Link to count data:
+      for(i in 1:nsite2){
+          Count[i] ~ dpois(lambda[i])
+          log(lambda[i]) <- intCount + eta[site2[i]]
+      }
+      intCount ~ dnorm(0,0.001)
+      
+      
+      }
+      

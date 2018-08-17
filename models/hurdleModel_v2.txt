@@ -1,7 +1,4 @@
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-# Specify model in BUGS language
-sink("hurdleModel_v2.txt")
-cat("
+
     model {
     
     #Model to predict site suitability
@@ -153,5 +150,4 @@ cat("
     totAbund<-sum(realAbund)
 
     }
-    ",fill = TRUE)
-sink()
+    
