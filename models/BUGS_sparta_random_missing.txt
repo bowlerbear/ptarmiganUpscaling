@@ -23,7 +23,7 @@
     Py[j]<- z[site[j],year[j]]*p[j] #probability to detect = prob of occ * prob of detection
 
     #detection model:
-    logit(p[j]) <-  int.d + alpha.p[year[j]]
+    logit(p[j]) <-  int.d
 
     # dtype.p *L2[j]/L[j]  + d.tree * tree_line_position[site[j]] + d.tree2 * tree_line_position2[site[j]]
   } 
@@ -37,11 +37,6 @@
   }
   intL ~ dunif(0,100)  
   intL2 ~ dunif(0,100)
-
-  # Derived parameters
-  for (t in 1:nyear) {  
-    psi.fs[t] <- sum(z[1:nsite, t])/nsite
-  } 
 
   #Priors 
 
@@ -88,7 +83,7 @@
     }
     
     tau.lp <- 1 / (sd.lp * sd.lp)                 
-    sd.lp ~ dt(0, 1, 1)T(0,) 
+    sd.lp ~ dunif(0,10) 
 
     mean.p ~ dunif(0, 1)         # Detection intercept on prob. scale
     int.d <- logit(mean.p)

@@ -1,14 +1,13 @@
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 cat("
   model{
-  # JAGS code for SPARTA model plus random walk prior
-  # on the year effect of the state model + intercept + halfcauchy hyperpriors
+  # JAGS code for SPARTA model
   
   # State model
   for (i in 1:nsite){ 
     for (t in 1:nyear){
       z[i,t] ~ dbern(muZ[i,t]) 
-      logit(muZ[i,t])<- int + a[t] + inprod(beta[],occDM[i,]) + random.adm[adm[i]]
-      # year as a fixed factor and year (a) as a random factor and environ variables
+      logit(muZ[i,t])<- int.alpha + inprod(beta[],occDM[i,]) 
     }
   }   
   
@@ -18,14 +17,9 @@ cat("
     Py[j]<- z[site[j],year[j]]*p[j] #probability to detect = prob of occ * prob of detection
 
     #detection model:
-    logit(p[j]) <-  int.det + dtype.p*L2[j]/L[j] +inprod(beta.det[],occDM[site[j],]) + random.adm.det[adm[site[j]]]
-    #depends on year and list length
+    logit(p[j]) <-  int.d + inprod(beta.det[],occDM[site[j],]) + beta.e * Effort[j]
     } 
   
-  # Derived parameters
-  for (t in 1:nyear) {  
-    psi.fs[t] <- sum(z[1:nsite, t])/nsite
-  } 
 
   #model for missing list length data
   for(j in 1:nvisit){
@@ -40,7 +34,9 @@ cat("
   #Priors 
 
   # State model priors
-    int ~ dnorm(0,0.001)
+    ############################
+    mean.psi ~ dunif(0, 1)       # Occupancy intercept on prob. scale
+    int.alpha <- logit(mean.psi)
  
     #years
     for(t in 1:nyear){
@@ -64,7 +60,12 @@ cat("
     random.adm.sd ~ dunif(0,10)
 
     #Observation model priors
-    int.det ~ dnorm(0,0.001)
+    ##########################
+    mean.p ~ dunif(0, 1)         # Detection intercept on prob. scale
+    int.d <- logit(mean.p)
+    
+    beta.sd ~ dnorm(0,0.01)
+    beta.e ~ dnorm(0,0.01)
 
     #year effects
     for (t in 1:nyear) {
@@ -80,9 +81,6 @@ cat("
     for(i in 1:n.covs){
       beta.det[i] ~ dnorm(0,0.1)
     }
-
-    #observation model covariates
-    dtype.p ~ dnorm(0, 0.01)
 
     #adm effects
     for(i in 1:n.adm){

@@ -8,7 +8,7 @@ cat("
   # State model
   for (i in 1:nsite){ 
       z[i] ~ dbern(muZ[i]) 
-      logit(muZ[i]) <- int.alpha
+      logit(muZ[i]) <- int.alpha + random.adm[adm[i]] + random.adm2[adm2[i]]
     }
   
   ### Observation Model
@@ -18,7 +18,7 @@ cat("
     
     Py[j]<- z[site[j]]*p[j] #probability to detect = prob of occ * prob of detection
 
-    logit(p[j]) <-  int.d + eta.s.y[siteyear[j]]
+    logit(p[j]) <-  int.d 
 
   } 
 
@@ -27,6 +27,8 @@ cat("
     int.alpha <- logit(mean.psi)
     mean.p ~ dunif(0, 1)         # Detection intercept on prob. scale
     int.d <- logit(mean.p)
+
+
 
     #random year effects
     for(t in 1:nyear){
@@ -48,6 +50,21 @@ cat("
     } 
     tau.s.y <- 1/(sd.s.y * sd.s.y) 
     sd.s.y ~ dunif(0,10)
+
+    #adm effects
+    for(i in 1:n.adm){
+    random.adm[i] ~ dnorm(0,random.adm.tau)
+    }
+    random.adm.tau <- pow(random.adm.sd,-2)
+    random.adm.sd ~ dunif(0,10)
+    
+    
+    #adm2 effects
+    for(i in 1:n.adm2){
+    random.adm2[i] ~ dnorm(0,random.adm2.tau)
+    }
+    random.adm2.tau <- pow(random.adm2.sd,-2)
+    random.adm2.sd ~ dunif(0,10)
 
 
   }
