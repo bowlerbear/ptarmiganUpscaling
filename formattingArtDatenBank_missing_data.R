@@ -6,20 +6,46 @@ source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/generalF
 
 #get norway##############################################################
 
+#using a m grid
+equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
+
 library(raster)
 library(maptools)
 library(rgeos)
 data(wrld_simpl)
 Norway<- subset(wrld_simpl,NAME=="Norway")
+NorwayOrig<-Norway
 Norway <- gBuffer(Norway,width=1)
+Norway<-spTransform(Norway,crs(equalM))
+NorwayOrigProj<-spTransform(NorwayOrig,crs(equalM))
 
-########################################################################
+#########################################################################
 
-#choose modelling resolution:
+#create grid
+newres=5000#5 km grid
+mygrid<-raster(extent(projectExtent(Norway,equalM)))
+res(mygrid)<-newres
+mygrid[]<-1:ncell(mygrid)
+plot(mygrid)
+gridTemp<-mygrid
+myGridDF<-as.data.frame(mygrid,xy=T)
 
-#newres=1
+#########################################################################
 
-newres=0.05
+#within this grid, define cells of interest:
+
+plot(mygrid)
+plot(NorwayOrigProj,add=T)
+
+myGridMask<-data.frame(extract(mygrid,NorwayOrigProj,weights=T,normalizeWeights=F)[[1]])
+myGridMask<-myGridMask$value[myGridMask$weight>0.5]
+myGrid2<-mygrid
+myGrid2[!getValues(mygrid)%in%myGridMask]<-NA
+plot(myGrid2)
+plot(NorwayOrigProj,add=T)
+#looks good!
+focusGrids <- getValues(myGrid2)[!is.na(getValues(myGrid2))]
+focusGridsDF <- as.data.frame(myGrid2,xy=T)
 
 #########################################################################
 
@@ -66,21 +92,22 @@ lirype<-subset(lirype,year>2006&year<2018)
 lirype<-subset(lirype,month >3 & month <11)
 table(lirype$year)
 
-#make spatial
+#make spatial and convert CRS
 coordinates(lirype)<-c("decimalLongitude","decimalLatitude")
-plot(Norway)
-plot(lirype,add=T)
-#all points look pretty good!! few in the sea
+proj4string(lirype) <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+
+#all points look pretty good!!
 
 #overlay to the grid
 library(raster)
-mygrid<-raster(extent(Norway))
-res(mygrid)<-newres
-mygrid[]<-1:ncell(mygrid)
-#plot(mygrid)
-gridTemp<-mygrid
-#get grid number for each point
+plot(NorwayOrig)
+#plot(lirype,add=T,pch=16,cex=0.5,col= alpha("red",0.1))
+
+#pull out the grid cells
+lirype <- sp::spTransform(lirype, crs(equalM))
 lirype$grid<-extract(mygrid,lirype)
+plot(mygrid)
+plot(lirype)
 
 #get number of points per grid cell
 library(plyr)
@@ -95,14 +122,14 @@ hist(gridSummary$nuRecs)
 gridSummary$RepeatedVisits<-sapply(gridSummary$nuRecs,function(x)ifelse(x>1,1,0))
 #table(gridSummary$RepeatedVisits)
 #0    1 
-#1654 1662
+#1209 1454
 
 #grid cell per year
 gridSummary<-ddply(lirype@data,.(grid,year),summarise,nuRecs=length(name))
 gridSummary$RepeatedVisits<-sapply(gridSummary$nuRecs,function(x)ifelse(x>1,1,0))
 #table(gridSummary$RepeatedVisits)
 #0    1 
-#4726 2435
+#3992 2348
 
 ##########################################################################
 
@@ -179,7 +206,7 @@ gridSummary$RepeatedVisits<-sapply(gridSummary$nuRecs,function(x)ifelse(x>1,1,0)
 #####################################################################
 
 #subsequent times:
-
+setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling")
 load("allbirds_uniqueRecords.RData")
 names(allbirds)[which(names(allbirds)=="name")]<-"Species"
 
@@ -205,22 +232,25 @@ names(allbirds)[which(names(allbirds)=="name")]<-"Species"
 
 #make spatial
 coordinates(allbirds)<-c("decimalLongitude","decimalLatitude")
-proj4string(allbirds)<-crs(Norway)
-#plot(Norway)
-#plot(allbirds,add=T)
-#all points look pretty good!! few in the sea...
+proj4string(allbirds)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+
+#plotting original
+plot(NorwayOrig)
+#plot(allbirds[sample(1:nrow(allbirds),295832),],add=T,pch=16,cex=0.5,col= alpha("red",0.1))
+
+#plotting
+allbirds <- sp::spTransform(allbirds, crs(equalM))
+mygrid[]<-1:ncell(mygrid)
+plot(mygrid)
+plot(Norway,add=T)
+plot(allbirds[1:1000,],add=T)
+#all points look pretty good!! 
 
 #exclude points beyond the mask
 out<-over(allbirds,Norway)
 allbirds<-allbirds[!is.na(out),]
 
 #overlay to the grid
-library(raster)
-mygrid<-raster(extent(Norway))
-res(mygrid)<-newres
-mygrid[]<-1:ncell(mygrid)
-plot(mygrid)
-#get grid number for each point
 allbirds$grid<-extract(mygrid,allbirds)
 
 #identify all grid cells within the buffer region
@@ -230,7 +260,7 @@ plot(mygridMask)
 mygridMaskDF<-as.data.frame(mygridMask,xy=T)
 mygridMaskDF<-subset(mygridMaskDF,!is.na(layer))
 
-#recoganise
+#reorganise
 allbirds<-subset(allbirds,!is.na(Species))
 allbirds <- subset(allbirds,!is.na(grid))
 all_data<-data.frame(allbirds@data,allbirds@coords) 
@@ -239,29 +269,35 @@ table(all_data$year,all_data$month)
 
 #########################################################################
 
-#get info on administrative names for the grid
+#are all grid cells in focus grids included here?
 
-library(rgdal)
-NorwayADM<-readOGR(dsn="C:/Users/diana.bowler/OneDrive - NINA/Alpine/NOR_adm",layer="NOR_adm2")
-crs(NorwayADM)
-mygridDF<-as.data.frame(mygrid,xy=T)
-mygridPoints<-mygridDF
-coordinates(mygridPoints)<-c("x","y")
-proj4string(mygridPoints)<-crs(NorwayADM)
-myAdm<-over(mygridPoints,NorwayADM)
-myAdm$grid<-mygridPoints@data$layer
+length(focusGrids)#11846
+length(unique(all_data$grid))#12291
 
-myAdm$VARNAME_1<-as.character(myAdm$NAME_1)
-myAdm$VARNAME_1[is.na(myAdm$VARNAME_1)]<-"outside"
-myAdm$VARNAME_2<-as.character(myAdm$NAME_2)
-myAdm$VARNAME_2[is.na(myAdm$VARNAME_2)]<-"outside"
-table(myAdm$VARNAME_1)
-table(myAdm$VARNAME_2)
-mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$VARNAME_1))
-plot(mygrid)#looks good!
-mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$VARNAME_2))
-plot(mygrid)#looks good!
+#plot focusGrids
+plot(myGrid2)
 
+#plot where we have data
+myGridsDF_Data<-subset(myGridDF, (layer %in% unique(all_data$grid)))
+dataRaster<-rasterize(myGridsDF_Data[,1:2],field=myGridsDF_Data[,3],mygrid)
+plot(dataRaster)
+
+par(mfrow=c(2,2))
+plot(dataRaster)
+plot(myGrid2)
+
+#plot where we dont have data
+myGrid3<-myGrid2
+myGrid3[!is.na(dataRaster)]<-NA
+plot(myGrid3)
+
+#identify these cells
+missingGrids<-getValues(myGrid3)[!is.na(getValues(myGrid3))]
+length(missingGrids)#2776
+
+allGrids<-sort(c(unique(all_data$grid),missingGrids))
+length(allGrids)#15067
+  
 #########################################################################
 
 #get list length info
@@ -307,14 +343,11 @@ listlengthDF$y<-sapply(listlengthDF$visit,function(x)ifelse(x%in%lirype@data$vis
 
 table(listlengthDF$y)
 #0      1 
-#784145  10770 
-#removing poor observers
-#0      1 
-#604912   6063
+#714369  10321 
 
 #add NAs for all years and grids
 newgrid<-expand.grid(year=unique(listlengthDF$year),
-                     grid=sort(unique(mygridMaskDF$layer)))
+                     grid=allGrids)
 listlengthDF<-merge(listlengthDF,newgrid,by=c("year","grid"),all.y=T)
 summary(listlengthDF)
 table(listlengthDF$grid,listlengthDF$year)
@@ -333,15 +366,6 @@ listlengthDF<-arrange(listlengthDF,year,grid)
 listlengthDF$siteIndex<-as.numeric(as.factor(listlengthDF$grid))
 listlengthDF$yearIndex<-as.numeric(as.factor(listlengthDF$year))
 
-#add adm
-listlengthDF$adm<-myAdm$VARNAME_1[match(listlengthDF$grid,myAdm$grid)]
-table(listlengthDF$adm)
-listlengthDF$admN<-as.numeric(factor(listlengthDF$adm))
-
-listlengthDF$adm2<-myAdm$VARNAME_2[match(listlengthDF$grid,myAdm$grid)]
-table(listlengthDF$adm2)
-listlengthDF$admN2<-as.numeric(factor(listlengthDF$adm2))
-
 ######################################################################################################
 
 #combine environmental and pop data:
@@ -349,17 +373,20 @@ listlengthDF$admN2<-as.numeric(factor(listlengthDF$adm2))
 setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling")
 load("varDF_allEnvironData_5km.RData")
 varDF<-subset(varDF,!duplicated(grid))
-listlengthDF<-merge(listlengthDF,varDF,by="grid",sort=F)
+mygrid[]<-0
+mygrid[varDF$grid]<-varDF$bio1
+plot(mygrid)
 
 #check where we have data
+listlengthDF<-merge(listlengthDF,varDF,by="grid",sort=F)
+
 mygrid[]<-0
-mygrid[listlengthDF$grid]<-listlengthDF$admN
+mygrid[listlengthDF$grid]<-listlengthDF$bio1
 plot(mygrid)
 
 #if testing, reduce the number of sites - get number of times each grid was visited
 #gridSummary <- ddply(listlengthDF,.(grid),summarize,nuVisits=length(y[!is.na(y)]))
 #listlengthDF <- subset(listlengthDF,grid%in%gridSummary$grid[gridSummary$nuVisits>0])
-
 
 ##################################################################################################
 
@@ -367,13 +394,13 @@ plot(mygrid)
 
 summary(listlengthDF$tree_line_position)
 summary(listlengthDF$tree_line_position[listlengthDF$y==1&!is.na(listlengthDF$y)])
-#seen at most at -535m
+#seen at most at -553
 
 #nrow(subset(listlengthDF,tree_line_position<(-536)))#3475
-#nrow(subset(listlengthDF,tree_line_position<(-536) & !is.na(y)))#175...
+#nrow(subset(listlengthDF,tree_line_position<(-560) & !is.na(y)))#119...
 
 #exclude very high sites
-listlengthDF$High <- ifelse(listlengthDF$tree_line_position<(-540),1,0)
+listlengthDF$High <- ifelse(listlengthDF$tree_line_position<(-560),1,0)
 listlengthDF <- subset(listlengthDF, High==0)
 
 ##################################################################################################
@@ -390,8 +417,13 @@ listlengthDF<-arrange(listlengthDF,yearIndex,siteIndex)
 listlengthDF_SiteCovs<-subset(listlengthDF,!duplicated(grid))
 
 #adm data
+
+#add adm
+table(listlengthDF$adm)
 listlengthDF$admN<-as.numeric(factor(listlengthDF$adm))
+table(listlengthDF$adm2)
 listlengthDF$admN2<-as.numeric(factor(listlengthDF$adm2))
+
 siteInfo<-unique(listlengthDF[,c("siteIndex","admN","grid","admN2")])
 
 ############################################################################
