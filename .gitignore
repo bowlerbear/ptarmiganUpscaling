@@ -37,3 +37,7 @@ vignettes/*.pdf
 *.png
 
 Marina/*
+literature/*
+ms/*
+old/*
+sims/*
