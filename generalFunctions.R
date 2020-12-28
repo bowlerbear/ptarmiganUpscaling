@@ -4,22 +4,23 @@
 
 getEnvironData<-function(myraster,mygridTemp){
   require(maptools)
+  require(plyr)
   
   #crop raster to Norway extent
   rasterCRS<-crs(myraster)
-  Norway<-spTransform(Norway,rasterCRS)
-  myraster<-crop(myraster,extent(Norway))
+  NorwayB<-spTransform(Norway,rasterCRS)
+  myraster<-crop(myraster,extent(NorwayB))
   
-  #convert raster into points and convert to lon lat
+  #convert raster into points and convert
   myrasterDF<-as.data.frame(myraster,xy=T)
   names(myrasterDF)[3]<-"myraster"
   coordinates(myrasterDF)<-c("x","y")
   proj4string(myrasterDF)<-rasterCRS
-  myrasterDF<-spTransform(myrasterDF,"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+  myrasterDF<-spTransform(myrasterDF,crs(equalM))
   
   #get general grid
   mygrid<-gridTemp
-  projection(mygrid)<-CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0") 
+  projection(mygrid)<- equalM
   
   #get mean myraster values per grid cell
   mygrid[]<-1:ncell(mygrid)
@@ -101,4 +102,16 @@ invlogit<- function(x) exp(x)/(1+exp(x))
 
 getDecimalPlaces<-function(x){
   nchar(gsub("(.*\\.)|([0]*$)", "", as.character(x)))
+}
+
+#get the mode Name for each mtbq
+Mode <- function(x) {
+  ux <- unique(x)
+  x <- x[!is.na(x)]
+  if(length(x)>0){
+    return(ux[which.max(tabulate(match(x, ux)))])
+  }
+  else{
+    return(NA)
+  }
 }
