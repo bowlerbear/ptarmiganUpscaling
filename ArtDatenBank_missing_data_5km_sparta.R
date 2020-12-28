@@ -1,5 +1,11 @@
 ####################################################################################################
-source('C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/formattingArtDatenBank_missing_data.R')
+
+setwd("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling")
+
+source('formattingArtDatenBank_missing_data.R')
+#remember only a subset of the data is currently used
+#need to fix "outside" adms still
+
 ###################################################################################################
 
 oldlistlengthDF<-listlengthDF
@@ -7,77 +13,228 @@ oldlistlengthDF<-listlengthDF
 nrow(listlengthDF_SiteCovs)#15530
 
 #sample a random sample of the grid?
-sampledSites<-sample(unique(listlengthDF$grid),5000)
-listlengthDF<-subset(listlengthDF,grid%in%sampledSites)
+#sampledSites<-sample(unique(listlengthDF$grid),5000)
+#listlengthDF<-subset(listlengthDF,grid%in%sampledSites)
 
 ###################################################################################################
 
 #order data by site and year:
-listlengthDF$siteIndex<-as.numeric(factor(listlengthDF$grid))
-listlengthDF$yearIndex<-as.numeric(factor(listlengthDF$year))
-listlengthDF<-arrange(listlengthDF,siteIndex,yearIndex)
+listlengthDF$siteIndex <- as.numeric(factor(listlengthDF$grid))
+listlengthDF$yearIndex <- as.numeric(factor(listlengthDF$year))
+listlengthDF <- arrange(listlengthDF,siteIndex,yearIndex)
 
 #extract site data
-listlengthDF_SiteCovs<-subset(listlengthDF,!duplicated(grid))
+listlengthDF_SiteCovs <- subset(listlengthDF,!duplicated(grid))
 
-#adm data
-listlengthDF$admN<-as.numeric(factor(listlengthDF$adm))
-listlengthDF$admN2<-as.numeric(factor(listlengthDF$adm2))
-siteInfo<-unique(listlengthDF[,c("siteIndex","admN","grid","admN2","adm","adm2")])
-siteInfo_ArtsDaten<-siteInfo
+#adm indicies
+listlengthDF$admN <- as.numeric(factor(listlengthDF$adm))
+listlengthDF$admN2 <- as.numeric(factor(listlengthDF$adm2))
+siteInfo <- unique(listlengthDF[,c("siteIndex","admN","grid","admN2","adm","adm2")])
+siteInfo_ArtsDaten <- siteInfo
 
 #add random siye/year effect
-listlengthDF$siteyearIndex<-as.numeric(factor(interaction(listlengthDF$siteIndex,listlengthDF$yearIndex)))
+listlengthDF$siteyearIndex <- as.numeric(factor(interaction(listlengthDF$siteIndex,listlengthDF$yearIndex)))
 
 ###################################################################################################
 
 #Add sampling days per year/site
-#samplingDays<-ddply(listlengthDF,.(siteyearIndex),summarise,
-                   #nuDays=length(unique(month[!is.na(y)],day[!is.na(y)])))
+samplingDays<-ddply(listlengthDF,.(siteyearIndex),summarise,
+                   nuDays=length(unique(month[!is.na(y)],day[!is.na(y)])))
 
-#listlengthDF$samplingDays<-samplingDays$nuDays[match(listlengthDF$siteyearIndex,samplingDays$siteyearIndex)]
+listlengthDF$samplingDays<-samplingDays$nuDays[match(listlengthDF$siteyearIndex,samplingDays$siteyearIndex)]
 
-listlengthDF$Effort<-listlengthDF$L2/listlengthDF$nuSpecies
-listlengthDF$Effort[is.na(listlengthDF$Effort)]<-0
+listlengthDF$Effort <- listlengthDF$L2/listlengthDF$nuSpecies
+listlengthDF$Effort[is.na(listlengthDF$Effort)] <- 0
 
 ###################################################################################################
 
-#fit as glm with explanatory variables
+#fit as glm with explanatory variables - binary response
 
-#add to the dataset, the coordinates of the grid
-gridDF<-as.data.frame(gridTemp,xy=T)
-load("varDF_allEnvironData_5km.RData")
-varDF<-merge(varDF,gridDF,by.x="grid",by.y="layer",all.x=T)
+tempDF <- subset(listlengthDF,!duplicated(grid))
 
 #get y
-occupancyGrid<-ddply(listlengthDF,.(grid),summarise,species=max(y,na.rm=T))
-varDF<-merge(varDF,occupancyGrid,by="grid",all.x=T)
-varDF$species[is.infinite(varDF$species)]<-NA
+occupancyGrid <- ddply(listlengthDF,.(grid),summarise,species=max(y,na.rm=T))
+tempDF <- merge(tempDF,occupancyGrid,by="grid",all.x=T)
+tempDF$species[is.infinite(tempDF$species)]<-NA
 
-#remove nonsurvyed data
-varDF2<-subset(varDF,!is.na(species))
-mean(varDF2$species)
+#remove nonsurvyed grids
+tempDF <- subset(tempDF,!is.na(species))
+mean(tempDF$species)
 
-summary(glm(species~alpine_habitat2,data=varDF2))
-summary(glm(species~bio1,data=varDF2))
-summary(glm(species~bio5,data=varDF2))
-summary(glm(species~tree_line_position + I(tree_line_position^2),data=varDF2))
-summary(glm(species~Top,data=varDF2))
+summary(glm(species~alpine_habitat2,data=tempDF))
+summary(glm(species~bio1,data=tempDF))
+summary(glm(species~bio5,data=tempDF))
+summary(glm(species~tree_line_position + I(tree_line_position^2),data=tempDF))
+summary(glm(species~Top,data=tempDF))
 
 #all together
-summary(glm(species~bio1 + Open + tree_line_position + I(tree_line_position^2),data=varDF))
+summary(glm(species~bio1 + Open + tree_line_position + I(tree_line_position^2),
+            data=tempDF,family="binomial"))
 #all significant...
-glm1<-glm(species~bio1 + Open + tree_line_position + I(tree_line_position^2),data=varDF2)
+glm1<-glm(species ~ scale(bio1) + Open + scale(tree_line_position) + 
+            scale(I(tree_line_position^2)),family="binomial",data=tempDF)
+summary(glm1)
+
+#plot predictions
+tempDF$x <- mygridMaskDF$x[match(tempDF$grid,mygridMaskDF$layer)]
+tempDF$y <- mygridMaskDF$y[match(tempDF$grid,mygridMaskDF$layer)]
+
+tempDF$fits<-predict(glm1,type="response",newdata=tempDF)
+ggplot(tempDF)+
+  geom_point(aes(x,y,colour=fits),shape=15,size=rel(1))+
+  scale_colour_gradient(low="steelblue",high="red")
+  #geom_point(data=subset(varDF2,species==1),aes(x,y),alpha=0.1)
+
+tempDF$fits.se<-predict(glm1,type="response",newdata=tempDF,se.fit=TRUE)$se.fit
+ggplot(tempDF)+
+  geom_point(aes(x,y,colour=fits.se),shape=15,size=rel(1))+
+  scale_colour_gradient(low="steelblue",high="red")
+
+###############################################################################
+
+#glm - number of visits as the response
+
+visitGrid <- ddply(listlengthDF,.(grid),summarise,
+                   nuVisits = length(y[!is.na(y)]),
+                   nuObs = sum(y[!is.na(y)]))
+
+tempDF <- merge(tempDF,visitGrid,by="grid")
+
+#remove nonsurvyed data
+tempDF <- subset(tempDF,nuVisits>0)
+table(tempDF$nuObs)
+
+#all together
+glm1 <- glm(cbind(nuObs,nuVisits-nuObs)~
+              scale(bio1) + scale(Open) + 
+              scale(tree_line_position) + scale(I(tree_line_position^2)),
+            data=tempDF,family="binomial")
+
+#put probability scale on the same as last one
+
+#plot predictions
+tempDF$fits<-predict(glm1,type="response",newdata=tempDF)
+ggplot(tempDF)+
+  geom_point(aes(x,y,colour=fits),shape=15,size=rel(1))+
+  scale_colour_gradient(low="steelblue",high="red")
+
+tempDF$fits.se<-predict(glm1,type="response",newdata=tempDF,se.fit=TRUE)$se.fit
+ggplot(tempDF)+
+  geom_point(aes(x,y,colour=fits.se),shape=15,size=rel(1))+
+  scale_colour_gradient(low="steelblue",high="red")
+
+qplot(fits,fits.se,data=tempDF)
+
+##############################################################################
+
+tempDF$fitsL <- predict(glm1,type="link",newdata=tempDF)
+tempDF$fitsL.se <- predict(glm1,type="link",newdata=tempDF,se.fit=TRUE)$se.fit
+
+#sensitivity analysis
+allPreds <- tempDF[,c("grid","x","y","nuVisits",
+                      "fits","fits.se","fitsL","fitsL.se")]
+
+#total predicted number of grid cells
+sum(allPreds$fits)
+sum(allPreds$fits.se)
+
+#for each grid
+#all current occupancies for all other grids
+#take new samples for focus grid
+#get new predicted total sample size
+
+myGridSurveys <- function(allPreds,mygrid){
+  
+  currentFits <- allPreds$fits[allPreds$grid!=mygrid]
+  
+  totalNu <- as.numeric()
+  require(boot)
+  for(i in 1:100){
+  newSample <- invlogit(rnorm(1,allPreds$fitsL[allPreds$grid==mygrid],
+                     allPreds$fitsL.se[allPreds$grid==mygrid]))
+  
+  #new predicted total number of grids
+  totalNu[i] <- sum(currentFits,newSample)
+  }
+  
+  data.frame(grid=mygrid,mean(totalNu),sd(totalNu))
+}
+
+#apply function to each grid
+sensitivityOutput <- ldply(allPreds$grid,function(x){
+  myGridSurveys(allPreds,mygrid=x)
+})
+
+allPreds <- merge(allPreds,sensitivityOutput,by="grid")
+ggplot(allPreds)+
+  geom_point(aes(x,y,colour=sd.totalNu.),shape=15,size=rel(1))+
+  scale_colour_gradient2(low="grey",mid="pink",high="purple",
+                         midpoint=0.004)
+
+qplot(fits,sd.totalNu.,data=allPreds)
+qplot(sd.totalNu.,nuVisits,data=allPreds)
+
+summary(lm(sqrt(sd.totalNu.) ~ scale(fits) + scale(nuVisits),data=allPreds))
+
+#simulate change in binomial variance
+#with different values of n
+
+#variation only partly caused by number of visits
+#pull out the predicted effect of another visit?
+summary(lm(sqrt(sd.totalNu.) ~ scale(fits)*nuVisits,data=allPreds))
+
+allPreds$fitsB <- ifelse(allPreds$fits < median(allPreds$fits),"L","H")
+summary(lm(sqrt(sd.totalNu.) ~ fitsB + fitsB:nuVisits,data=allPreds))
+#effect of visit more important in higher density areas
 
 
-varDF2$fits<-predict(glm1,type="response",newdata=varDF)
+n <- 1:100
 
-#need to get x and y coords below
-library(ggplot2)
-ggplot(varDF2)+
-  geom_point(aes(x,y,colour=fits),shape=15,size=rel(1),alpha=0.5)+
-  scale_colour_gradient(low="steelblue",high="red")+
-  geom_point(data=subset(varDF2,species==1),aes(x,y))
+p1 <- 0.1
+p2 <- 0.5
+p3 <- 0.9
+
+varBin <- function(n,p){
+  n*p*(1-p)
+}
+
+varBin(n=n,p=p1)
+
+df1 <- data.frame(n,varBin(n,p1))
+df1$P <- p1
+names(df1)<-c("n","var","p")
+
+df2 <- data.frame(n,varBin(n,p2))
+df2$P <- p2
+names(df2)<-c("n","var","p")
+
+df3 <- data.frame(n,varBin(n,p3))
+df3$P <- p3
+names(df3)<-c("n","var","p")
+
+allDF <- rbind(df1,df2,df3)
+qplot(n,var,data=allDF,facets=~factor(p))
+
+###influence measures#######################################################################
+
+#https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/influence.measures
+
+#Bar Plot of Cook's distance to detect observations that strongly influence fitted values of the mode
+#cooks.distance
+
+tempDF$cooks <- cooks.distance(glm1)
+ggplot(tempDF)+
+  geom_point(aes(x,y,colour=cooks),shape=15,size=rel(1))+
+  scale_colour_gradient(low="steelblue",high="red")
+
+#DFBETA measures the difference in each parameter estimate with and without the influential point
+#dfbeta - for the overall mean
+temp <- dfbeta(glm1)
+
+tempDF$dfbeta <- temp[,1]
+ggplot(tempDF)+
+  geom_point(aes(x,y,colour=abs(dfbeta)),shape=15,size=rel(1))+
+  scale_colour_gradient2(low="grey",mid="pink",high="purple")
 
 ###################################################################################################
 
@@ -88,7 +245,7 @@ library(gbm)
 
 str(varDF)
 
-brt1 <- gbm.step(data=varDF2, gbm.x = 4:15, gbm.y = 18,family = "bernoulli")
+brt1 <- gbm.step(data=tempDF, gbm.x = 4:15, gbm.y = 18,family = "bernoulli")
 
 summary(brt1)
 #                                var    rel.inf
@@ -115,6 +272,7 @@ gbm.plot.fits(brt1)
 find.int <- gbm.interactions(brt1)
 find.int$interactions#none!
 find.int$rank.list
+
 
 ###################################################################################################
 
@@ -157,6 +315,8 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   tree_line_position = scale(listlengthDF_SiteCovs$tree_line_position),
                   tree_line_position2 = scale(listlengthDF_SiteCovs$tree_line_position^2))
 
+bugs.data_ArtsDaten <- bugs.data
+
 #alpine_habitat:
 #1= Open lowland, 
 #2 = Low alpine zone, 
@@ -166,7 +326,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
 ########################################################################################
 
 #get BUGS functions
-source('C:/Users/diana.bowler/OneDrive - NINA/methods/models/bugsFunctions.R')
+source('bugsFunctions.R')
 
 #need to specify initial values
 library(reshape2)
@@ -180,18 +340,14 @@ inits <- function(){list(z = zst)}
 params <- c("mean.p","mean.psi")
 
 #specify model structure
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_constant.txt", n.thin=10,
+out1 <- jags(bugs.data, inits=inits, params, "models/BUGS_sparta_constant.txt", n.thin=10,
              n.chains=3, n.burnin=300,n.iter=1000,parallel=T)
 
 print(out1,2)
 
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km_basic0.RData")
-
+save(out1,file="model-outputs/out1_OM_random_missing_5km_basic0.RData")
 
 #test sample of 5000
-
             mean   sd     2.5%      50%    97.5% overlap0 f Rhat n.eff
 mean.p       0.15  0.0     0.15     0.15     0.16    FALSE 1 1.00   210
 mean.psi     0.17  0.0     0.16     0.17     0.18    FALSE 1 1.01   175
@@ -205,8 +361,7 @@ deviance 10716.33 62.6 10600.99 10716.29 10840.94    FALSE 1 1.02   119
 params <- c("mean.p","mean.psi","random.adm.sd","random.adm2.sd")
 
 #specify model structure
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_random_missing.txt", n.thin=5,
+out1 <- jags(bugs.data, inits=inits, params, "models/BUGS_sparta_random_missing.txt", n.thin=5,
              n.chains=3, n.burnin=1000,n.iter=2500,parallel=T)
 print(out1,2)
 
@@ -229,8 +384,7 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 params <- c("mean.p","mean.psi","beta")
 
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_variables_missing.txt", n.thin=10,
+out1 <- jags(bugs.data, inits=inits, params, "models/BUGS_sparta_variables_missing.txt", n.thin=10,
              n.chains=3, n.burnin=1000,n.iter=3000,parallel=T)
 
 print(out1,2)
@@ -259,15 +413,12 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 params <- c("mean.p","mean.psi","beta","beta.det","beta.sd","beta.e")
 
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_variables_missing.txt", n.thin=3,
+out1 <- jags(bugs.data, inits=inits, params, "models/BUGS_sparta_variables_missing.txt", n.thin=3,
              n.chains=3, n.burnin=2500,n.iter=5000,parallel=T)
 
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/model-outputs")
-save(out1,file="out1_OM_random_missing_5km.RData")
+save(out1,file="model-outputs/out1_OM_random_missing_5km.RData")
 
 print(out1,2)
-
                   mean     sd       2.5%        50%      97.5% overlap0    f Rhat n.eff
 mean.p            0.06   0.00       0.06       0.06       0.07    FALSE 1.00 1.05    47
 mean.psi          0.12   0.00       0.12       0.12       0.13    FALSE 1.00 1.11    26
@@ -335,8 +486,7 @@ bugs.data$zero = jags.ready$jags.data$zero
 params <- c("dtype.p","mu.lp","rho")
 
 #run model
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
-out1 <- jags(bugs.data, inits=inits, params, "BUGS_sparta_JAGAM.txt", n.thin=nt,
+out1 <- jags(bugs.data, inits=inits, params, "models/BUGS_sparta_JAGAM.txt", n.thin=nt,
              n.chains=3, n.burnin=10000,n.iter=50000)
 
 traceplot(out1)
@@ -369,11 +519,10 @@ q2<-qplot(meanL2,propY,data=propSuccess)#negative relationship
 q3<-qplot(meanL3,propY,data=propSuccess)#more positive
 plot_grid(q1,q2,q3)
 
-
 #plot in relation to site covariates
 propSuccess<-merge(propSuccess,listlengthDF_SiteCovs,by=c("grid","adm","adm2","site"))
 q1<-qplot(tree_line_position,propY,data=propSuccess)#quadratic relationship
-q2<-qplot(access,propY,data=propSuccess)#positivee??
+q2<-qplot(access,propY,data=propSuccess)#positive??
 q3<-qplot(bio1,propY,data=propSuccess)#negative relationship
 plot_grid(q1,q2,q3)
 
