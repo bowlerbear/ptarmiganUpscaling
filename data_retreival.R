@@ -29,3 +29,27 @@ for(y in 1:length(myyears)){
   write.table(out$data,file=paste0("all_birds",myyears[y],"_",mymonths[m],"_GBIF.txt"),sep="\t",row.names=FALSE)
   }
 }
+
+
+#get what ebird data is available
+eBird <- read.delim("C:/Users/db40fysa/Dropbox/Alpine/eBird/ebd_NO_relNov-2020/ebd_NO_relNov-2020.txt")
+head(eBird)
+eBird$Date <- as.Date(eBird$OBSERVATION.DATE)
+eBird$Year <- lubridate::year(eBird$Date)
+table(eBird$Year)
+#only data from 2014 onwards...
+table(eBird$ALL.SPECIES.REPORTED)
+#
+#0      1 
+#72675 347534
+#use these complete checklists??
+eBird <- subset(eBird,ALL.SPECIES.REPORTED==1)
+#subset to 2014 onwards
+eBird <- subset(eBird,Year>=2014)
+#plot these
+qplot(LONGITUDE,LATITUDE,data=subset(eBird,Year==2014))
+qplot(LONGITUDE,LATITUDE,data=subset(eBird,Year==2015))
+qplot(LONGITUDE,LATITUDE,data=subset(eBird,Year==2016))
+qplot(LONGITUDE,LATITUDE,data=subset(eBird,Year==2017))
+qplot(LONGITUDE,LATITUDE,data=subset(eBird,Year==2018))
+#bit sparse???
