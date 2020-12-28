@@ -1,5 +1,12 @@
+
 #using a m grid
 equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
+
+#get helper file
+source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R')
+
+#get focal grids
+focusGrids <- readRDS("focusGrids.rds")
 
 #get norway##############################################################
 
@@ -7,7 +14,7 @@ library(raster)
 library(maptools)
 library(rgeos)
 data(wrld_simpl)
-Norway<- subset(wrld_simpl,NAME=="Norway")
+Norway <- subset(wrld_simpl,NAME=="Norway")
 Norway <- gBuffer(Norway,width=1)
 Norway<-spTransform(Norway,crs(equalM))
 plot(Norway)
@@ -15,23 +22,17 @@ plot(Norway)
 ########################################################################
 
 #create grid
-newres=5000#5 km grid
-mygrid<-raster(extent(projectExtent(Norway,equalM)))
-res(mygrid)<-newres
-mygrid[]<-1:ncell(mygrid)
+newres = 5000#5 km grid
+mygrid <- raster(extent(projectExtent(Norway,equalM)))
+res(mygrid) <- newres 
+mygrid[] <- 1:ncell(mygrid)
 plot(mygrid)
-gridTemp<-mygrid
+gridTemp <- mygrid
 plot(Norway,add=T)
 
 #########################################################################
 
 #identify all grid cells within the buffer region
-
-library(rgeos)
-mygridMask<-mask(mygrid,Norway)
-mygridMaskDF<-as.data.frame(mygridMask,xy=T)
-head(mygridMaskDF)
-plot(mygridMask)
 
 #########################################################################
 
@@ -39,81 +40,37 @@ plot(mygridMask)
 library(rgdal)
 
 #make both spatial objects in the same crs
-NorwayADM<-readOGR(dsn="C:/Users/diana.bowler/OneDrive - NINA/Alpine/NOR_adm",layer="NOR_adm2")
-NorwayADM<-spTransform(NorwayADM,crs(equalM))
-mygridPoints<-mygridMaskDF
-coordinates(mygridPoints)<-c("x","y")
-proj4string(mygridPoints)<-crs(NorwayADM)
+NorwayADM <- readOGR(dsn="C:/Users/db40fysa/Dropbox/Alpine/NOR_adm",layer="NOR_adm2")
+
+#get multiple points per grid
+NorwayADM <- spTransform(NorwayADM,crs(equalM))
+mygridPoints <- mygrid
+mygridPoints <- disaggregate(mygridPoints,fact=10)
+mygridPoints <- as.data.frame(mygridPoints,xy=T)
+coordinates(mygridPoints) <- c("x","y")
+proj4string(mygridPoints) <- crs(NorwayADM)
 
 #check they overlap
 plot(mygridPoints)
 plot(NorwayADM,add=T,col="red")
 
 #extract the data
-myAdm<-over(mygridPoints,NorwayADM)
-myAdm$grid<-mygridPoints$layer
-myAdm$adm<-as.character(myAdm$NAME_1)
-myAdm$adm[is.na(myAdm$adm)]<-"outside"
-myAdm$adm2<-as.character(myAdm$NAME_2)
-myAdm$adm2[is.na(myAdm$adm2)]<-"outside"
-myAdm<-subset(myAdm,!is.na(grid))
-table(myAdm$adm)
+myAdm <- over(mygridPoints,NorwayADM)
+myAdm$grid <- mygridPoints$layer
+
+#get mode of adm and adm2 per grid
+myAdm <- ddply(myAdm,.(grid),summarise,
+               adm = Mode(NAME_1),
+               adm2 = Mode(NAME_2))
+
+myAdm$adm[is.na(myAdm$adm)] <- "outside"
+myAdm$adm2[is.na(myAdm$adm2)] <- "outside"
+myAdm <- subset(myAdm,!is.na(grid))
 
 #check the results
 mygrid[]<-0
 mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$adm))
 plot(mygrid)#looks good!
-
-########################################################################
-
-#general functions:
-
-#get function to extract raster into for these grids:
-
-getEnvironData<-function(myraster,mygridTemp){
-  require(maptools)
-  require(plyr)
-  
-  #crop raster to Norway extent
-  rasterCRS<-crs(myraster)
-  NorwayB<-spTransform(Norway,rasterCRS)
-  myraster<-crop(myraster,extent(NorwayB))
-  
-  #convert raster into points and convert
-  myrasterDF<-as.data.frame(myraster,xy=T)
-  names(myrasterDF)[3]<-"myraster"
-  coordinates(myrasterDF)<-c("x","y")
-  proj4string(myrasterDF)<-rasterCRS
-  myrasterDF<-spTransform(myrasterDF,crs(equalM))
-  
-  #get general grid
-  mygrid<-gridTemp
-  projection(mygrid)<- equalM
-  
-  #get mean myraster values per grid cell
-  mygrid[]<-1:ncell(mygrid)
-  variable<-extract(mygrid,myrasterDF)
-  myrasterDF<-data.frame(myrasterDF@data)
-  myrasterDF$grid<-variable
-  myrasterDF<-ddply(myrasterDF,.(grid),summarise,myraster=mean(myraster,na.rm=T))
-  return(myrasterDF)
-}
-
-plotBUGSData<-function(myvar){
-  temp<-listlengthDF
-  temp<-subset(temp,siteIndex %in% bugs.data$site)
-  temp$variable<-as.numeric(bugs.data[myvar][[1]])[match(temp$siteIndex,bugs.data$site)]
-  temp$variablePA<-sapply(temp$variable,function(x)ifelse(is.na(x),0,1))
-  temp<-subset(temp,!duplicated(siteIndex))
-  mygrid<-gridTemp
-  par(mfrow=c(1,2))
-  mygrid[]<-0
-  mygrid[temp$grid]<-temp$variable
-  plot(mygrid)
-  mygrid[]<-0
-  mygrid[temp$grid]<-temp$variablePA
-  plot(mygrid)
-}
 
 #######################################################################
 
@@ -400,4 +357,5 @@ mygrid[varDF$grid]<-varDF$bio6
 plot(mygrid)
 
 save(varDF,file="varDF_allEnvironData_5km.RData")
+
 ########################################################################################
