@@ -16,7 +16,7 @@ library(rgeos)
 data(wrld_simpl)
 Norway <- subset(wrld_simpl,NAME=="Norway")
 Norway <- gBuffer(Norway,width=1)
-Norway<-spTransform(Norway,crs(equalM))
+Norway <- spTransform(Norway,crs(equalM))
 plot(Norway)
 
 ########################################################################
@@ -38,6 +38,7 @@ plot(Norway,add=T)
 
 #get info on administrative names for the grid
 library(rgdal)
+library(plyr)
 
 #make both spatial objects in the same crs
 NorwayADM <- readOGR(dsn="C:/Users/db40fysa/Dropbox/Alpine/NOR_adm",layer="NOR_adm2")
@@ -68,24 +69,38 @@ myAdm$adm2[is.na(myAdm$adm2)] <- "outside"
 myAdm <- subset(myAdm,!is.na(grid))
 
 #check the results
-mygrid[]<-0
-mygrid[myAdm$grid]<-as.numeric(as.factor(myAdm$adm))
+mygrid[] <- 0
+mygrid[myAdm$grid] <- as.numeric(as.factor(myAdm$adm))
 plot(mygrid)#looks good!
+
+#how many outside do we have?
+table(getValues(mygrid))
 
 #######################################################################
 
 #Code to get environmental data:
+library(raster)
 
 #get accessibility map
 #https://www.nature.com/articles/nature25181
-setwd("C:/Users/diana.bowler/OneDrive - NINA/maps/accessibility/accessibility_to_cities_2015_v1.0")
-access<-raster("accessibility_to_cities_2015_v1.0.tif")
-out<-getEnvironData(access,mygrid)
+#setwd("C:/Users/diana.bowler/OneDrive - NINA/maps/accessibility/accessibility_to_cities_2015_v1.0")
+access <- raster("C:/Users/db40fysa/Nextcloud/sMon/Gis-DataData/Accessibility/2015_accessibility_to_cities_v1.0/2015_accessibility_to_cities_v1.0.tif")
+out <- getEnvironData(access,mygrid)
 
 #check data
 hist(out$myraster)
 summary(out$myraster)
-outAccess<-out
+outAccess <- out
+names(outAccess)[2] <- "Accessibility"
+outAccess$Accessibility[is.nan(outAccess$Accessibility)] <- NA
+summary(outAccess$Accessibility)
+outAccess <- subset(outAccess,!is.na(Accessibility))
+outAccess <- subset(outAccess,!is.na(grid))
+
+#check the results
+mygrid[] <- 0
+mygrid[outAccess$grid] <- outAccess$Accessibility
+plot(mygrid)#looks good!
 
 rm(access)
 rm(out)
