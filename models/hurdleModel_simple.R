@@ -1,5 +1,5 @@
 # Specify model in BUGS language
-sink("models/hurdleModel_v2.txt")
+sink("models/hurdleModel_simple.txt")
 cat("
     model {
     
@@ -11,11 +11,7 @@ cat("
     #On occupancy:
     mean.psi ~ dunif(0, 1)       # Occupancy intercept on prob. scale
     int.psi <- logit(mean.psi)     # Occupancy intercept
-    
-    #for(i in 1:n.covs){
-    #  beta[i] ~ dnorm(0,0.1)
-    #}
-    # 
+    beta.o.bio1 ~ dnorm(0,0.01)     #covariate in bio1
     
     #random grid effect on occupancy
     for(i in 1:ngrid){
@@ -71,13 +67,7 @@ cat("
     random.det.year.sd ~ dunif(0,10)
     
     #other covariates for detection
-    beta.e  ~ dnorm(0,0.01)
-    beta.e2  ~ dnorm(0,0.01)
-    beta.d  ~ dnorm(0,0.01)
-
-    #for(i in 1:n.covs){
-    #  beta.det[i] ~ dnorm(0,0.1)
-    #}
+    beta.e  ~ dnorm(0,0.01) #covariate for survey effort
 
     # State model
     for (i in 1:ngrid){ 
@@ -87,8 +77,8 @@ cat("
       z[i,t] ~ dbern(muZ[i,t]) 
     
       logit(muZ[i,t]) <- int.psi + random.o.grid[i] + random.o.adm[adm[i]] +
-                          random.o.adm2[adm2[i]] + random.o.year[t] 
-                          #inprod(beta[],occDM[i,])
+                          random.o.adm2[adm2[i]] + random.o.year[t] +
+                          beta.o.bio1 * bio1[i]
       }
     }   
     
@@ -101,8 +91,6 @@ cat("
     
       #detection model:
       logit(p[j]) <-  int.p + beta.e * log(Effort[j]+1) +   
-                      #inprod(beta.det[],occDM[grid[j],]) 
-                      #beta.d * log(Density[grid[j],year[j]])+
                       random.det.adm2[adm2[grid[j]]] + random.det.adm[adm[grid[j]]]+
                       random.det.year[year[j]]
 
@@ -118,7 +106,8 @@ cat("
     ##############################################################
 
     #intercept
-    int.d ~ dunif(0,5)    
+    int.d ~ dunif(1,3)   
+    beta.a.bio1 ~ dnorm(0,0.01)
     
     #random grid effect on abundance
     for(i in 1:ngrid){
@@ -149,15 +138,9 @@ cat("
     random.a.year.sd ~ dunif(0,10)
 
 
-    #for(i in 1:n.covs){
-    #  beta.abundance[i] ~ dnorm(0,0.1)
-    #}
-
     #Work out the fraction of the grid that was surveyed
-    #ESW.tauLT <- pow(ESW.sdLT,-2)
     for(j in 1:ngrid){
       for(t in 1:nyear){
-        #predESW[j,t] ~ dnorm(ESW.meanLT[j,t],ESW.tauLT[j,t])
         #for simplicity, we just put in a standard number of 108 with effective strip with
         #it doesnt vary so much
         surveyArea[j,t] <- TransectLengthLT[j,t]/1000 * 108/1000 * 2
@@ -177,12 +160,12 @@ cat("
     #State model to observed data
     for(j in 1:ngrid){
       for(t in 1:nyear){
-          log(Density[j,t]) <- int.d + 
+          Density[j,t] <- exp(int.d + 
                                 random.a.year[t] + 
                                 random.a.grid[j] +
                                 random.a.adm[adm[j]] +
-                                random.a.adm2[adm2[j]] 
-                                #inprod(beta.abundance[],occDM[j,]) 
+                                random.a.adm2[adm2[j]] +
+                                beta.a.bio1 * bio1[j])
 
       }
     }

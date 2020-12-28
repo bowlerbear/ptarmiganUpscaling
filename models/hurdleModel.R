@@ -1,6 +1,5 @@
-setwd("C:/Users/diana.bowler/OneDrive - NINA/Alpine/ptarmiganUpscaling/models")
 # Specify model in BUGS language
-sink("hurdleModel.txt")
+sink("models/hurdleModel.txt")
 cat("
     model {
     
@@ -87,7 +86,7 @@ cat("
     
       logit(muZ[i,t]) <- int.psi + random.site[i] + random.adm[adm[i]] +
                           random.adm2[adm2[i]] + random.o.year[t]
-                          #inprod(beta[],occDM[i,]) 
+                           
       }
     }   
     
@@ -119,7 +118,7 @@ cat("
     int.d ~ dnorm(0,0.001)    
     
     #for(i in 1:n.covs){
-    #  beta.occupancy[i] ~ dnorm(0,0.1)
+    #  beta.abundance[i] ~ dnorm(0,0.1)
     #} 
 
 
@@ -172,7 +171,7 @@ cat("
       for(t in 1:n.YearsLT){
           log(Density[j,t]) <- int.d + random.line.site[j] + random.line.adm[siteLT[j]] + 
                                 random.line.adm2[site2LT[j]] + random.line.year[t]
-                              #inprod(beta.occupancy[],occDM_Occupancy[j,])
+                              #inprod(beta.abundance[],occDM_abundance[j,])
       }
     }
     

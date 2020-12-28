@@ -1,23 +1,26 @@
 
     model {
     
-    #Model to predict site suitability
-    ##################################
+    #Dataset 1: Model to predict grid suitability - occupancy model
+    ###############################################################
 
     # Priors
-    mean.p ~ dunif(0, 1)         # Detection intercept on prob. scale
-    int.p <- logit(mean.p)      # Detection intercept
-  
+    
+    #On occupancy:
     mean.psi ~ dunif(0, 1)       # Occupancy intercept on prob. scale
     int.psi <- logit(mean.psi)     # Occupancy intercept
-
-
-    #random site effect on occupancy
-    for(i in 1:nsite){
-      random.o.site[i] ~ dnorm(0,random.o.site.tau)
+    
+    #for(i in 1:n.covs){
+    #  beta[i] ~ dnorm(0,0.1)
+    #}
+    # 
+    
+    #random grid effect on occupancy
+    for(i in 1:ngrid){
+      random.o.grid[i] ~ dnorm(0,random.o.grid.tau)
     }
-    random.o.site.tau <- pow(random.o.site.sd,-2)
-    random.o.site.sd ~ dunif(0,10)
+    random.o.grid.tau <- pow(random.o.grid.sd,-2)
+    random.o.grid.sd ~ dunif(0,10)
 
     #adm effects on occupancy
     for(i in 1:n.adm){
@@ -33,28 +36,57 @@
     random.o.adm2.tau <- pow(random.o.adm2.sd,-2)
     random.o.adm2.sd ~ dunif(0,10)
 
-    #random year effect
+    #random year effect on occupancy
     for(i in 1:nyear){
       random.o.year[i] ~ dnorm(0,random.o.year.tau)
     }
     random.o.year.tau <- pow(random.o.year.sd,-2)
     random.o.year.sd ~ dunif(0,10)
 
+    #Priors on detection
+    mean.p ~ dunif(0, 1)         # Detection intercept on prob. scale
+    int.p <- logit(mean.p)      # Detection intercept
+    
+    #adm effects on detection
+    for(i in 1:n.adm){
+      random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
+    }
+    random.det.adm.tau <- pow(random.det.adm.sd,-2)
+    random.det.adm.sd ~ dunif(0,10)
+    
+    #adm2 effects on detection
+    for(i in 1:n.adm2){
+    random.det.adm2[i] ~ dnorm(0,random.det.adm2.tau)
+    }
+    random.det.adm2.tau <- pow(random.det.adm2.sd,-2)
+    random.det.adm2.sd ~ dunif(0,10)
+
+    #random year effect on occupancy
+    for(i in 1:nyear){
+      random.det.year[i] ~ dnorm(0,random.det.year.tau)
+    }
+    random.det.year.tau <- pow(random.det.year.sd,-2)
+    random.det.year.sd ~ dunif(0,10)
+    
     #other covariates for detection
     beta.e  ~ dnorm(0,0.01)
     beta.e2  ~ dnorm(0,0.01)
     beta.d  ~ dnorm(0,0.01)
 
+    #for(i in 1:n.covs){
+    #  beta.det[i] ~ dnorm(0,0.1)
+    #}
+
     # State model
-    for (i in 1:nsite){ 
+    for (i in 1:ngrid){ 
 
       for (t in 1:nyear){
     
       z[i,t] ~ dbern(muZ[i,t]) 
     
-      logit(muZ[i,t]) <- int.psi + random.o.site[i] + random.o.adm[adm[i]] +
+      logit(muZ[i,t]) <- int.psi + random.o.grid[i] + random.o.adm[adm[i]] +
                           random.o.adm2[adm2[i]] + random.o.year[t] 
-
+                          #inprod(beta[],occDM[i,])
       }
     }   
     
@@ -63,31 +95,35 @@
     
       y[j] ~ dbern(Py[j]) #data is Y
     
-      Py[j]<- z[site[j],year[j]]*p[j] #probability to detect = prob of occ * prob of detection
+      Py[j]<- z[grid[j],year[j]]*p[j] 
     
       #detection model:
-      logit(p[j]) <-  int.p + beta.e * Effort[j] + beta.e2 * Effort2[j] + beta.d * Density[site[j]]
+      logit(p[j]) <-  int.p + beta.e * log(Effort[j]+1) +   
+                      #inprod(beta.det[],occDM[grid[j],]) 
+                      #beta.d * log(Density[grid[j],year[j]])+
+                      random.det.adm2[adm2[grid[j]]] + random.det.adm[adm[grid[j]]]+
+                      random.det.year[year[j]]
 
     }
 
 
-    #get mean occupancy for each site over time
-    for(j in 1:nsite){
+    #get mean occupancy for each grid over time (since we want to model dynamically)
+    for(j in 1:ngrid){
       meanZ[j] <- mean(z[j,])
     }
 
-    #Model the abundance at line transect grids 
+    #Dataset 2: Model the abundance at line transect grids 
     ##############################################################
 
     #intercept
     int.d ~ dnorm(0,0.001)    
     
-    #random site effect on abundance
-    for(i in 1:nsite){
-      random.a.site[i] ~ dnorm(0,random.a.site.tau)
+    #random grid effect on abundance
+    for(i in 1:ngrid){
+      random.a.grid[i] ~ dnorm(0,random.a.grid.tau)
     }
-    random.a.site.tau <- pow(random.a.site.sd,-2)
-    random.a.site.sd ~ dunif(0,10)
+    random.a.grid.tau <- pow(random.a.grid.sd,-2)
+    random.a.grid.sd ~ dunif(0,10)
     
     #adm effects on abundance
     for(i in 1:n.adm){
@@ -111,43 +147,58 @@
     random.a.year.sd ~ dunif(0,10)
 
 
-    #Work out the fraction of the both that was surveyed
-    ESW.tauLT <- pow(ESW.sdLT,-2)
-    for(j in 1:nsite){
+    #for(i in 1:n.covs){
+    #  beta.abundance[i] ~ dnorm(0,0.1)
+    #}
+
+    #Work out the fraction of the grid that was surveyed
+    #ESW.tauLT <- pow(ESW.sdLT,-2)
+    for(j in 1:ngrid){
       for(t in 1:nyear){
-        predESW[j,t] ~ dnorm(ESW.meanLT[j,t],ESW.tauLT[j,t])
-        surveyArea[j,t] <- TransectLengthLT[j,t]/1000 * predESW[j,t]/1000 * 2
+        #predESW[j,t] ~ dnorm(ESW.meanLT[j,t],ESW.tauLT[j,t])
+        #for simplicity, we just put in a standard number of 108 with effective strip with
+        #it doesnt vary so much
+        surveyArea[j,t] <- TransectLengthLT[j,t]/1000 * ESW/1000 * 2
         surveyFraction[j,t] <- surveyArea[j,t]/25
       }
     }
 
     #Observation model:
-    for(j in 1:nsite){
+    for(j in 1:ngrid){
       for(t in 1:nyear){
+        #data is NuIndivsLT
         NuIndivsLT[j,t] ~ dpois(expNuIndivs[j,t])
         expNuIndivs[j,t] <- Density[j,t] * surveyFraction[j,t]
       }
     }
     
     #State model to observed data
-    for(j in 1:nsite){
+    for(j in 1:ngrid){
       for(t in 1:nyear){
-          log(Density[j,t]) <- int.d + random.a.site[j] + random.a.adm[adm[j]] + 
-                                random.a.adm2[adm2[j]] + random.a.year[t] 
+          log(Density[j,t]) <- int.d + 
+                                random.a.year[t] + 
+                                random.a.grid[j] +
+                                random.a.adm[adm[j]] +
+                                random.a.adm2[adm2[j]] 
+                                #inprod(beta.abundance[],occDM[j,]) 
+
       }
     }
 
-    for(j in 1:nsite){
+    for(j in 1:ngrid){
       meanDensity[j] <- mean(Density[j,])
     }
 
 
-    #Predict realized abundance, across all sites, i.e. suitability * abundance
-    for(j in 1:nsite){
+    #3: Integrate results of both datasets
+    #realized abundance = suitability(presence/absence) * abundance
+    
+    for(j in 1:ngrid){
       realAbund[j] ~ dpois(meanDensity[j] * meanZ[j])
     }
 
-    totAbund<-sum(realAbund)
+    #sum up across all grids
+    totAbund <- sum(realAbund)
 
     }
     
