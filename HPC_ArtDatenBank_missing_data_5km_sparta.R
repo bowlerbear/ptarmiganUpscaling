@@ -39,7 +39,7 @@ listlengthDF <- readRDS("/data/idiv_ess/ptarmiganUpscaling/listlength_iDiv.rds")
 #subset to focal grids and those with environ covariate data
 
 focusGrids <- readRDS("/data/idiv_ess/ptarmiganUpscaling/focusGrids.rds")
-load("/data/idiv_ess/ptarmiganUpscaling/varDF_allEnvironData_5km_idiv.RData")
+varDF <- readRDS("/data/idiv_ess/ptarmiganUpscaling/varDF_allEnvironData_5km_idiv.rds")
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
 
@@ -107,6 +107,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   alpine_habitat2 = log(siteInfo$alpine_habitat2+1),
                   alpine_habitat3 = log(siteInfo$alpine_habitat3+1),
                   alpine_habitat4 = log(siteInfo$alpine_habitat4+1),
+                  elevation = scale(siteInfo$elevation),
                   tree_line_position = scale(siteInfo$tree_line_position),
                   tree_line_position2 = scale(siteInfo$tree_line_position^2))
 
@@ -129,20 +130,36 @@ zst <- reshape2::acast(listlengthDF, siteIndex~yearIndex, value.var="y",fun=max,
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
-### EXP VARS ########################################################
+### fit model ########################################################
 
 #specify model structure
-bugs.data$occDM <- model.matrix(~ bugs.data$tree_line_position + bugs.data$tree_line_position2+bugs.data$bio1 + bugs.data$open)[,-1]
+bugs.data$occDM <- model.matrix(~ bugs.data$tree_line_position + 
+                                  bugs.data$tree_line_position2 +
+                                  bugs.data$bio1 + 
+                                  bugs.data$bio1_2 + 
+                                  bugs.data$bio6 +
+                                  bugs.data$elevation +
+                                  bugs.data$prefopen + 
+                                  bugs.data$open)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
-params <- c("mean.p","mean.psi","beta")
+params <- c("mean.p","beta","beta.effort","beta.det.open","grid.muZ")
 
 modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
 
 n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 
-out1 <- jags(bugs.data, inits=inits, params, modelfile, 
-n.thin=10, n.chains=n.cores, n.burnin=10000,n.iter=30000,parallel=T)
+n.iterations = 100
+
+out1 <- jags(bugs.data, 
+             inits = inits, 
+             params, 
+             modelfile, 
+             n.thin = 10, 
+             n.chains = n.cores, 
+             n.burnin = round(n.iterations/3),
+             n.iter = n.iterations,
+             parallel = T)
 
 saveRDS(out1,file="out_occModel_upscaling.rds")
