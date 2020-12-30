@@ -89,6 +89,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   #add an adm effect
                   adm = siteInfo$admN,
                   det.adm = listlengthDF$admN,
+                  det.open = scale(listlengthDF$Open),
                   n.adm = length(unique(siteInfo$admN)),
                   adm2 = siteInfo$admN2,
                   det.adm2 = listlengthDF$admN2,
@@ -144,13 +145,13 @@ bugs.data$occDM <- model.matrix(~ bugs.data$tree_line_position +
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
-params <- c("mean.p","beta","beta.effort","beta.det.open","grid.muZ")
+params <- c("mean.p","beta","beta.effort","beta.det.open","grid.z")
 
 modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
 
 n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 
-n.iterations = 100
+n.iterations = 20000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -162,4 +163,4 @@ out1 <- jags(bugs.data,
              n.iter = n.iterations,
              parallel = T)
 
-saveRDS(out1,file="out_occModel_upscaling.rds")
+saveRDS(out1$summary,file="outSummary_occModel_upscaling.rds")
