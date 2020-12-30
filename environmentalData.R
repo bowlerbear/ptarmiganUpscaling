@@ -433,6 +433,7 @@ varDF <- subset(varDF,!is.na(Forest))
 table(varDF$adm)
 table(varDF$adm2)
 
-save(varDF,file="data/varDF_allEnvironData_5km_idiv.RData")
+#save(varDF,file="data/varDF_allEnvironData_5km_idiv.RData")
+saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
 ########################################################################################
