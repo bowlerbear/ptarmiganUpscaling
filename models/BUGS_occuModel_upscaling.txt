@@ -22,19 +22,17 @@
 
     #detection model:
       logit(p[j]) <-  int.d + 
-                      #beta.det.open * open[site[j]] +
+                      beta.det.open * det.open[j] +
                       beta.effort * Effort[j] +
                       #inprod(beta.det[],occDM[site[j],]) +
-                      random.det.year[year[j]] 
+                      random.det.year[year[j]] +
+                      random.det.adm[det.adm[j]]
                       
     } 
   
   #get muZ without year effect
   for (i in 1:nsite){ 
-      
-      logit(grid.muZ[i])<- int.alpha + inprod(beta[],occDM[i,]) + 
-                          random.adm[adm[i]] +  eta[i]
-      
+      grid.z[i] <- sum(z[i,])/nyear
   } 
 
   #Priors 
@@ -86,6 +84,13 @@
     #covariate effects
     beta.det.open ~ dnorm(0,0.01)
     beta.effort ~ dnorm(0,0.01)
+    
+    #adm effects
+    for(i in 1:n.adm){
+      random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
+    }
+    random.det.adm.tau <- pow(random.adm.sd,-2)
+    random.det.adm.sd ~ dt(0, 1, 1)T(0,) 
 
 
   }
