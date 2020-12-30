@@ -34,13 +34,13 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 #source('formattingArtDatenBank_missing_data.R')
 
 #read in list length object (made on the Rstudio server)
-listlengthDF <- readRDS("listlength_iDiv.rds")
+listlengthDF <- readRDS("data/listlength_iDiv.rds")
 
 ### subset ##########################################################
 
 #subset to focal grids and those with environ covariate data
 
-focusGrids <- readRDS("focusGrids.rds")
+focusGrids <- readRDS("data/focusGrids.rds")
 load("data/varDF_allEnvironData_5km_idiv.RData")
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
@@ -458,3 +458,12 @@ q1<-qplot(tree_line_position,propY,data=propSuccess)#quadratic relationship
 q2<-qplot(access,propY,data=propSuccess)#positive??
 q3<-qplot(bio1,propY,data=propSuccess)#negative relationship
 plot_grid(q1,q2,q3)
+
+### HPC model plotting ####################################################
+
+out1 <- readRDS("model-outputs/out_occModel_upscaling.rds")
+print(out1$summary,3)
+siteInfo$preds <- out1$mean$grid.muZ
+mygrid[] <- NA
+mygrid[siteInfo$grid] <- siteInfo$preds
+plot(mygrid)
