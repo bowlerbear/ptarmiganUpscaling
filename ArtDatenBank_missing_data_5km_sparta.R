@@ -221,6 +221,16 @@ listlengthDF$admN2 <- as.numeric(factor(listlengthDF$adm2))
 #extract site data
 siteInfo <- subset(listlengthDF,!duplicated(grid))
 
+#add on observations 
+occupancyGrid <- ddply(listlengthDF,.(grid),summarise,
+                       species = max(y,na.rm=T))
+occupancyGrid$species[is.infinite(occupancyGrid$species)] <- NA
+table(occupancyGrid$species)
+siteInfo$species <- occupancyGrid$species[match(siteInfo$grid,occupancyGrid$grid)]
+
+siteInfo$x <- myGridDF$x[match(siteInfo$grid,myGridDF$layer)]
+siteInfo$y <- myGridDF$y[match(siteInfo$grid,myGridDF$layer)]
+
 ### BUGS object ################################################################
 
 #for BUGS
