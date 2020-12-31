@@ -75,9 +75,6 @@ pa_data <- st_as_sf(PA, coords = c("x", "y"), crs = st_crs(awt,asText=TRUE))
 # see the first few rows
 pa_data
 st_crs(pa_data)==st_crs(awt)
-st_crs(pa_data)
-st_crs(awt)
-st_crs(pa_data) = 9001
 
 # plot species data on the map
 plot(awt[[1]]) # plot raster data
@@ -85,7 +82,8 @@ plot(pa_data[which(pa_data$species==1), ], pch = 16, col="red", add=TRUE)
 plot(pa_data[which(pa_data$species==0), ], pch = 16, col="blue", add=TRUE)
 plot(pa_data)
 
-# spatial blocking by specified range with random assignment
+# spatial blocking
+
 sb <- spatialBlock(speciesData = pa_data,
                    species = "species",
                    rasterLayer = awt,
@@ -93,41 +91,30 @@ sb <- spatialBlock(speciesData = pa_data,
                    k = 5,
                    selection = "random")
 
-# spatial blocking by rows and columns with checkerboard assignment
 sb2 <- spatialBlock(speciesData = pa_data, 
                     species = "species",
                     rasterLayer = awt,
-                    rows = 5,
-                    cols = 6,
+                    rows = 10,
+                    cols = 10,
                     k = 5,
                     selection = "systematic")
 
-# spatial blocking by rows with systematic assignment
-sb3 <- spatialBlock(speciesData = pa_data,
-                    species = "species",
-                    rasterLayer = awt,
-                    rows = 6,
-                    selection = "checkerboard",
-                    biomod2Format = TRUE)
-
-# adding points on spatialBlock plot
-library(ggplot2)
-
-sb$plots + geom_sf(data = pa_data, alpha = 0.5)
-
 # environmental clustering
+
 eb <- envBlock(rasterLayer = awt,
                speciesData = pa_data,
                species = "species",
                k = 5,
                standardization = "standard", # rescale variables between 0 and 1
-               rasterBlock = FALSE,
+               rasterBlock = TRUE,
                numLimit = 50)
 
 sac <- spatialAutoRange(rasterLayer = awt,
                         sampleNumber = 5000,
                         doParallel = TRUE,
                         showPlots = TRUE)
+
+#interactive
 
 # explore generated folds
 foldExplorer(blocks = sb, 
@@ -145,30 +132,25 @@ rangeExplorer(rasterLayer = awt,
               minRange = 30000, # limit the search domain
               maxRange = 100000)
 
+### retrieve each fold in the data
+mydata <- raster::extract(awt, pa_data,df=TRUE)
+nrow(mydata) #sites with NA species data are excluded
+nrow(siteInfo)
+folds <- eb$foldID
+length(folds)
 
-#check that each fold contains data from all the adms
+#same order as in the siteInfo filer, as long as data with only presence/absence
+#records are used
+siteInfo$fold <- 6
+siteInfo$fold[!is.na(siteInfo$species)] <- folds
+table(siteInfo$fold,siteInfo$adm)
 
-## apply
-
-# extract the raster values for the species points as a dataframe
-mydata <- raster::extract(awt, pb_data)
-mydata <- as.data.frame(mydata)
-# create a vector of 1 (for presence) and 0 (for background samples)
-pb <- pb_data$Species
-
-# extract the folds in spatialBlock object created 
-# in the previous section (with presence-background data)
-# the foldID only works for spatialBlock and envBlock folds
-folds <- sb2$foldID
-
-# create an empty vector to store the AUC of each fold
-AUCs <- vector(mode = "numeric")
-for(k in seq_len(5)){
-  # extracting the training and testing indices
-  # this way only works with foldID
-  trainSet <- which(folds != k) # training set indices
-  testSet <- which(folds == k) # testing set indices
-
+# this way only works with foldID
+# for k = 1 to 5
+k = 1
+trainData = mydata[which(folds != k), ]
+testData = mydata[which(folds == k), ]  
+  
 ### AUC ##################################################
 
 #choice for binary data models is AUC, area under
