@@ -6,7 +6,7 @@ equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84
 source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R')
 
 #get focal grids
-focusGrids <- readRDS("focusGrids.rds")
+focusGrids <- readRDS("data/focusGrids.rds")
 
 ### get norway ##############################################################
 
@@ -69,7 +69,7 @@ myAdm$adm[is.na(myAdm$adm)] <- "outside"
 myAdm$adm2[is.na(myAdm$adm2)] <- "outside"
 myAdm <- subset(myAdm,!is.na(grid))
 
-saveRDS(myAdm,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/myAdm.rds")
+saveRDS(myAdm,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Adm.rds")
 
 #check the results
 mygrid[] <- 0
@@ -100,7 +100,7 @@ summary(outAccess$Accessibility)
 outAccess <- subset(outAccess,!is.na(Accessibility))
 outAccess <- subset(outAccess,!is.na(grid))
 
-saveRDS(outAccess,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/outAccess.rds")
+saveRDS(outAccess,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Access.rds")
 
 #check the results
 mygrid[] <- 0
@@ -125,7 +125,7 @@ summary(outHP$HumanPop)
 outHP <- subset(outHP,!is.na(HumanPop))
 outHP <- subset(outHP,!is.na(grid))
 
-saveRDS(outHP,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/outHP.rds")
+saveRDS(outHP,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_HumanDensity.rds")
 
 #check the results
 mygrid[] <- 0
@@ -225,7 +225,7 @@ myrasterDF$Habitat<-apply(myrasterDF,1,
                                                          "Forest","Open"))
 myrasterDF$Habitat[myrasterDF$Top>150]<-"Top"
 
-saveRDS(myrasterDF,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/grid_Habitats.rds")
+saveRDS(myrasterDF,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Habitats.rds")
 
 ### climate ################################################################################
 
@@ -243,11 +243,7 @@ setwd("C:/Users/db40fysa/Dropbox/Alpine/Bioclim_LST")
 #-BIO10: Mean temperature of the warmest quarter (°C*10): eurolst_clim.bio10.zip (MD5) 77MB
 #-BIO11: Mean temperature of the coldest quarter (°C*10): eurolst_clim.bio11.zip (MD5) 78MB
 
-tmean_raster <- raster(file.path(tempd, "tmean/tmean_9"))
-
-######
 #bio1#
-######
 temp_bio1 <- raster("eurolst_clim.bio01/eurolst_clim.bio01.tif")#res 250 m
 temp_bio1 <- aggregate(temp_bio1,fact=4,fun=mean,na.rm=T)
 
@@ -258,9 +254,7 @@ out_Bio1 <- out
 rm(temp_bio1)
 rm(out)
 
-##############
 #maximum temp#
-##############
 temp_bio5 <- raster("eurolst_clim.bio05/eurolst_clim.bio05.tif")
 temp_bio5 <- aggregate(temp_bio5,fact=4,fun=mean,na.rm=T)
 out <- getEnvironData(temp_bio5,mygrid)
@@ -285,13 +279,14 @@ names(out_Bio1)[2]<-"bio1"
 names(out_Bio5)[2]<-"bio5"
 names(out_Bio6)[2]<-"bio6"
 out_Bio<-cbind(out_Bio1,bio5=out_Bio5[,2],bio6=out_Bio6[,2])
+saveRDS(out_Bio,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Climate.rds")
 
 #combine others
 varDF <- merge(out_Bio,myrasterDF,by="grid",all=T)
 varDF <- merge(varDF,myAdm,by="grid",all=T)
 varDF <- subset(varDF,!is.na(grid))
 
-save(varDF,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/varDF_missing_5km_iDiv.RData")
+saveRDS(varDF,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/varDF_missing_5km_idiv.rds")
 
 ### correlations ############################################################################
 
@@ -300,38 +295,26 @@ library(GGally)
 ggpairs(varDF[,2:11])
 table(varDF$habitat)
 
-#bio1 and bio6 strongly related
-#bio1 and elevation strongly related
-#access and bio6 are related
-#open and elevation are correlated
-#bio1 and open are correlated
-#top and open are correlated
-#use habitat, bio 1 and bio 5
+#bio1 and bio6 strongly related (0.808)
+#top and open are strongly related (0.726)
+#pref open and top (0.901)
+#Agriculture and bottom are strongly related (0.907)
 
-#plot in space
-gridDF<-as.data.frame(gridTemp,xy=T)
-varDF$grid<-bugs.data$grid
-varDF<-merge(varDF,gridDF,by.x="grid",by.y="layer",all.x=T)
-
-qplot(x,y,data=varDF,color=habitat)
-qplot(x,y,data=varDF,color=Forest)
-qplot(x,y,data=varDF,color=Open)
-qplot(x,y,data=varDF,color=Top)
-qplot(x,y,data=varDF,color=Agriculture)
-qplot(x,y,data=varDF,color=bio1)
-qplot(x,y,data=varDF,color=bio5)
-qplot(x,y,data=varDF,color=bio6)
-
-#which grid cells do we not have information for all these
-NAgrid<-unique(c(varDF$grid[is.na(varDF$habitat)],varDF$grid[is.na(varDF$bio1)]))
-NAgrid
-varDF<-subset(varDF,!grid%in%NAgrid)
-#replot using code above
-#still good!
+# #plot in space
+# gridDF<-as.data.frame(gridTemp,xy=T)
+# varDF$grid<-bugs.data$grid
+# varDF<-merge(varDF,gridDF,by.x="grid",by.y="layer",all.x=T)
+# 
+# qplot(x,y,data=varDF,color=habitat)
+# qplot(x,y,data=varDF,color=Forest)
+# qplot(x,y,data=varDF,color=Open)
+# qplot(x,y,data=varDF,color=Top)
+# qplot(x,y,data=varDF,color=Agriculture)
+# qplot(x,y,data=varDF,color=bio1)
+# qplot(x,y,data=varDF,color=bio5)
+# qplot(x,y,data=varDF,color=bio6)
 
 ### coverage ################################################################################
-
-load("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/varDF_missing_5km_iDiv.RData")
 
 #subset to focal grids
 varDF <- subset(varDF,grid %in% focusGrids)
@@ -339,15 +322,15 @@ varDF <- subset(varDF,grid %in% focusGrids)
 apply(varDF,2,function(x)sum(is.na(x)))
 
 #check plots
-mygrid[] <- 0
+mygrid[] <- NA
 mygrid[varDF$grid] <- varDF$bio1
 plot(mygrid)
 #looks good
-mygrid[] <- 0
+mygrid[] <- NA
 mygrid[varDF$grid] <- varDF$PrefOpen
 plot(mygrid)
 #ok
-mygrid[] <- 0
+mygrid[] <- NA
 mygrid[varDF$grid]<-varDF$bio6
 plot(mygrid)
 #good!
@@ -426,14 +409,50 @@ missingAlpine <- alpineData$grid[is.na(alpineData$tree_line)]
 length(unique(missingVarDF,missingAlpine))#61 in total!!
 
 #merge all
-varDF <- merge(varDF,alpineData,by="grid")
+varDF <- merge(varDF,alpineData,by="grid",all=T)
 varDF <- subset(varDF,!is.na(Forest))
 
-#no missing data
+### check missing data again #########################################################
+
+apply(varDF,2,function(x)sum(is.na(x)))
+
+#5 grids are outside - can we figure out there admin???
 table(varDF$adm)
 table(varDF$adm2)
+subset(varDF,adm=="outside")$grid
+#22415 25249 25253 25721 74673
+
+#for each one, see what is the adm before and after the grid
+subset(varDF,grid %in% c(22412,22413,22414,22415,22416,22417,22418))#none
+#see about cells below
+mygrid[] <- 1:ncell(mygrid)
+rowColFromCell(mygrid,22415)
+getValues(mygrid,row=95)[137]
+getValues(mygrid,row=94)[137]
+getValues(mygrid,row=96)[137]
+subset(varDF,grid %in% c(22178,22652))
+varDF$adm[varDF$grid==22415] <- "Troms"
+varDF$adm2[varDF$grid==22415] <- "Bardu"
+
+subset(varDF,grid %in% c(25247,25248,25250,25251))
+varDF$adm[varDF$grid==25249] <- "Nordland"
+varDF$adm2[varDF$grid==25249] <- "Tysfjord"
+
+subset(varDF,grid %in% c(25251,25252,25253,25254,25255))
+varDF$adm[varDF$grid==25253] <- "Nordland"
+varDF$adm2[varDF$grid==25253] <- "Narvik"
+
+subset(varDF,grid %in% c(25719,25720,25721,25722,25723))
+varDF$adm[varDF$grid==25721] <- "Nordland"
+varDF$adm2[varDF$grid==25721] <- "Tysfjord"
+
+subset(varDF,grid %in% c(74671,74672,74673,74674,74675))
+varDF$adm[varDF$grid==74673] <- "Rogaland"
+varDF$adm2[varDF$grid==74673] <- "Klepp"
+
+table(varDF$adm)
+
+### save #############################################################################
 
 #save(varDF,file="data/varDF_allEnvironData_5km_idiv.RData")
 saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
-
-########################################################################################
