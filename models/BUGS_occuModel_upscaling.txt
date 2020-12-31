@@ -22,7 +22,7 @@
 
     #detection model:
       logit(p[j]) <-  int.d + 
-                      beta.det.open * det.open[j] +
+                      #beta.det.open * det.open[j] +
                       beta.effort * Effort[j] +
                       #inprod(beta.det[],occDM[site[j],]) +
                       random.det.year[year[j]] +
@@ -30,7 +30,7 @@
                       
     } 
   
-  #get muZ without year effect
+  #get mean z without year effect
   for (i in 1:nsite){ 
       grid.z[i] <- sum(z[i,])/nyear
   } 
