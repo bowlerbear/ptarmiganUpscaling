@@ -1,9 +1,13 @@
+library(tidyverse)
 library(sp)
+library(rgeos)
 library(raster)
 library(maptools)
-library(ggplot2)
-library(rgeos)
-library(plyr)
+
+#HPC
+myfolder <- "/data/idiv_ess/ptarmiganUpscaling" 
+#local
+myfolder <- "data"
 
 ### get norway##############################################################
 
@@ -19,8 +23,8 @@ NorwayOrigProj <- spTransform(NorwayOrig,crs(equalM))
 ### ref grid ########################################################
 
 #create grid
-newres=5000#5 km grid
-mygrid<-raster(extent(projectExtent(Norway,equalM)))
+newres = 5000#5 km grid
+mygrid <- raster(extent(projectExtent(Norway,equalM)))
 res(mygrid) <- newres
 mygrid[] <- 1:ncell(mygrid)
 plot(mygrid)
@@ -32,14 +36,14 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 #source('formattingArtDatenBank_missing_data.R')
 
 #read in list length object (made on the Rstudio server)
-listlengthDF <- readRDS("/data/idiv_ess/ptarmiganUpscaling/listlength_iDiv.rds")
+listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
 
 ### subset ##########################################################
 
 #subset to focal grids and those with environ covariate data
 
-focusGrids <- readRDS("/data/idiv_ess/ptarmiganUpscaling/focusGrids.rds")
-varDF <- readRDS("/data/idiv_ess/ptarmiganUpscaling/varDF_allEnvironData_5km_idiv.rds")
+focusGrids <- readRDS(paste(myfolder,"focusGrids.rds",sep="/"))
+varDF <- readRDS(paste(myfolder,"varDF_allEnvironData_5km_idiv.rds",sep="/"))
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
 
@@ -74,6 +78,9 @@ listlengthDF$admN2 <- as.numeric(factor(listlengthDF$adm2))
 
 #extract site data
 siteInfo <- subset(listlengthDF,!duplicated(grid))
+siteInfo_ArtsDaten <- siteInfo
+#saveRDS(siteInfo,
+#        file = "data/siteInfo_ArtsDaten.rds")
 
 ### BUGS object ################################################################
 
@@ -93,24 +100,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   n.adm = length(unique(siteInfo$admN)),
                   adm2 = siteInfo$admN2,
                   det.adm2 = listlengthDF$admN2,
-                  n.adm2 = length(unique(siteInfo$admN2)),
-                  #environcovs
-                  bio1 = scale(siteInfo$bio1),
-                  bio1_2 = scale(siteInfo$bio1^2),
-                  bio6 = scale(siteInfo$bio6),
-                  bio5 = scale(siteInfo$bio5),
-                  forest = scale(siteInfo$Forest),
-                  open = scale(siteInfo$Open),
-                  prefopen = scale(log(siteInfo$PrefOpen+1)),
-                  prefclosed = scale(log(siteInfo$PrefClosed+1)),
-                  top = scale(log(siteInfo$Top+1)),
-                  alpine_habitat1 = siteInfo$alpine_habitat1,
-                  alpine_habitat2 = log(siteInfo$alpine_habitat2+1),
-                  alpine_habitat3 = log(siteInfo$alpine_habitat3+1),
-                  alpine_habitat4 = log(siteInfo$alpine_habitat4+1),
-                  elevation = scale(siteInfo$elevation),
-                  tree_line_position = scale(siteInfo$tree_line_position),
-                  tree_line_position2 = scale(siteInfo$tree_line_position^2))
+                  n.adm2 = length(unique(siteInfo$admN2)))
 
 #bugs.data_ArtsDaten <- bugs.data
 
@@ -134,14 +124,14 @@ inits <- function(){list(z = zst)}
 ### fit model ########################################################
 
 #specify model structure
-bugs.data$occDM <- model.matrix(~ bugs.data$tree_line_position + 
-                                  bugs.data$tree_line_position2 +
-                                  bugs.data$bio1 + 
-                                  bugs.data$bio1_2 + 
-                                  bugs.data$bio6 +
-                                  bugs.data$elevation +
-                                  bugs.data$prefopen + 
-                                  bugs.data$open)[,-1]
+bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
+                                  scale(siteInfo$tree_line_position^2) +
+                                  scale(siteInfo$bio1) + 
+                                  scale(siteInfo$bio1^2) + 
+                                  scale(siteInfo$bio6) +
+                                  scale(siteInfo$elevation) +
+                                  scale(siteInfo$PrefOpen) + 
+                                  scale(siteInfo$Open))[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
