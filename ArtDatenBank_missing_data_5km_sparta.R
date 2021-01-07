@@ -41,7 +41,7 @@ listlengthDF <- readRDS("data/listlength_iDiv.rds")
 #subset to focal grids and those with environ covariate data
 
 focusGrids <- readRDS("data/focusGrids.rds")
-load("data/varDF_allEnvironData_5km_idiv.RData")
+varDF <- readRDS("data/varDF_allEnvironData_5km_idiv.rds")
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
 
