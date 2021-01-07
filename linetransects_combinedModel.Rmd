@@ -209,12 +209,10 @@ equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84
 
 
 #get Norway
-library(raster)
-library(maptools)
 data(wrld_simpl)
-Norway<- subset(wrld_simpl,NAME=="Norway")
+Norway <- subset(wrld_simpl,NAME=="Norway")
 Norway <- gBuffer(Norway,width=1)
-Norway<-spTransform(Norway,crs(equalM))
+Norway <- spTransform(Norway,crs(equalM))
 plot(Norway)
 
 #create grid
