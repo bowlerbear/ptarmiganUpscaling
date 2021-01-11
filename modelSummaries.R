@@ -1,3 +1,18 @@
+library(raster)
+library(sp)
+library(maptools)
+library(rgeos)
+
+### check siteInfo #######################################################
+
+siteInfo_Occ <- readRDS("data/siteInfo_ArtsDaten.rds")
+siteInfo_Abund <- readRDS("data/siteInfo_LineTransects.rds")
+
+#check all are the same
+all(siteInfo_Occ$grid==siteInfo_Abund$grid)
+all(siteInfo_Occ$siteIndex==siteInfo_Abund$siteIndex)
+#TRUE
+
 ### common grid ###########################################################
 
 #using a m grid
@@ -22,7 +37,9 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 ### occu models ##############################################
 
-### plotting map #################################################
+siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
+
+### plot map #################################################
 
 #from full model
 out1 <- readRDS("model-outputs/out_occModel_upscaling.rds")
@@ -49,7 +66,7 @@ library(tmap)
 tm_shape(mygrid)+
   tm_raster(title="Occupancy prob",palette="YlGnBu")
 
-### plotting coefficients #######################################
+### plot coefficients #######################################
 
 betas <- subset(out1,grepl("beta",out1$Param))
 betas <- betas[1:8,]
@@ -66,9 +83,40 @@ ggplot(betas)+
 
 ### distance models ##########################################
 
+siteInfo <- readRDS("data/siteInfo_LineTransects.rds")
+
+### plot map ##############################################
+
 out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+preds <- subset(out1,grepl("Density",out1$Param))
+siteInfo$preds <- log(preds$mean)
+mygrid[] <- NA
+mygrid[siteInfo$grid] <- siteInfo$preds
+plot(mygrid)
 
+# using tmap package
+crs(mygrid) <- equalM
+#tmaptools::palette_explorer()
+library(tmap)
+tm_shape(mygrid)+
+  tm_raster(title="log_Density",palette="YlGnBu")
 
+### plot coefficients #####################################
 
+betas <- subset(out1,grepl("beta",out1$Param))
+betas$variables <- c("bio1","open","tree_line_position", "tree_line_position2")
+
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean,
+                    ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("effect size on occupancy")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
+
+### end #################################################
 
 
