@@ -33,6 +33,7 @@
   #get mean z without year effect
   for (i in 1:nsite){ 
       grid.z[i] <- sum(z[i,])/nyear
+      grid.psi[i] <- sum(muZ[i,])/nyear
   } 
 
   #Priors 
