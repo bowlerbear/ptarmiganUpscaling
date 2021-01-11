@@ -106,7 +106,7 @@ focusGrids <- focusGrids[focusGrids %in% varDF$grid]
 #convert observations to this CRS as well
 proj4string(allDataObs) <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
 allDataObs <- sp::spTransform(allDataObs, crs(equalM))
-allDataObs$grid <- extract(mygrid,allDataObs)
+allDataObs$grid <- raster::extract(mygrid,allDataObs)
 allDataObs <- subset(allDataObs, grid %in% focusGrids)
 
 #plot
@@ -211,6 +211,7 @@ siteInfo$admN2 <- siteInfo_ArtsDaten$admN2[match(siteInfo$grid,siteInfo_ArtsDate
 
 #give a unique name
 siteInfo_LineTransects<-siteInfo
+#saveRDS(siteInfo, "data/siteInfo_LineTransects.rds")
 
 ### make arrays ###################################################
 
@@ -228,12 +229,12 @@ sum(as.numeric(totalsInfo),na.rm=T)
 #61993
 
 #check alignment with other datasets
-all(row.names(groupInfo)==siteInfo_ArtsDaten$siteIndex)
+all(row.names(groupInfo)==siteInfo$siteIndex)
 
 ### detection data ################################################
 
 allDetections <- allDataObs
-allDetections$siteIndex <- siteInfo_ArtsDaten$siteIndex[match(allDetections$grid,siteInfo_ArtsDaten$grid)]#should this be different
+allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$grid,siteInfo$grid)]
 allDetections$yearIndex <- as.numeric(factor(allDetections$Year))
 
 ### make bugs objects ###########################################
@@ -271,10 +272,14 @@ varDF <- unique(varDF)
 siteInfo <- merge(siteInfo,varDF,by="grid",all.x=T,sort=FALSE)
 
 #add new variables to the bugs data
-bugs.data$occDM <- model.matrix(~ as.numeric(scale(siteInfo$bio1)) +
-                                  as.numeric(scale(siteInfo$Open)) +
-                                  as.numeric(scale(siteInfo$tree_line_position)) +
-                                  as.numeric(scale(siteInfo$tree_line_position^2)))[,-1]
+bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
+                                  scale(siteInfo$tree_line_position^2) +
+                                  scale(siteInfo$bio1) + 
+                                  scale(siteInfo$bio5) +
+                                  scale(siteInfo$elevation) +
+                                  scale(siteInfo$Top) + 
+                                  scale(siteInfo$Open))[,-1]
+
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 ### fit model #################################################
