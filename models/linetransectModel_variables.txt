@@ -106,8 +106,7 @@
     for(j in 1:nsite){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- (predDensity[j,t] * (TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2))
-        predDensity[j,t] ~ dpois(Density[j,t])  
+        expNuIndivs[j,t] <- (Density.jt[j,t] * (TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2))
       }}
 
     #State model
@@ -115,13 +114,17 @@
       for(t in 1:nyear){
       
       #linear predictor on density
-        log(Density[j,t]) <- int.d + 
+        log(Density.jt[j,t]) <- int.d + 
                             random.d.line[j] + 
                             random.d.year[t] +
                             inprod(beta[],occDM[j,]) 
 
     }}
 
+
+    for(j in 1:nsite){
+      Density[j] <- sum(Density.jt[j,1:nyear])/nyear
+    }
 
     #calculate the Bayesian p-value
     e <- 0.0001
