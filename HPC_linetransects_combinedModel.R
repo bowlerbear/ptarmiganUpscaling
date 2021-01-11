@@ -285,16 +285,19 @@ library(jagsUI)
 params <- c("int.d","line.d.sd","year.d.sd",
             "beta","bpv","Density")
 
+modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
+
 out1 <- jags(bugs.data, 
              inits=NULL, 
              params, 
-             "linetransectModel_variables.txt", 
+             modelfile, 
              n.thin=10,
              n.chains=3, 
              n.burnin=10000,
              n.iter=20000,
              parallel=T)
 
-saveRDS(out1,file="out1_linetransectModel_variables.rds")
+saveRDS(out1$summary,file="outSummary_linetransectModel_variables.rds")
 
 ### end #######################################################
+
