@@ -102,13 +102,25 @@
       beta[i] ~ dnorm(0,0.1)
     }
 
+      
+    #Work out the fraction of the both that was surveyed
+    for(j in 1:nsite){
+      for(t in 1:nyear){
+        surveyArea[j,t] <- TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
+        surveyFraction[j,t] <- surveyArea[j,t]/25
+      }
+    }
+
+
     #Observation model:
     for(j in 1:nsite){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- (Density.jt[j,t] * (TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2))
-      }}
-
+        expNuIndivs[j,t] <- Density.jt[j,t] * surveyFraction[j,t]
+      }
+    }
+    
+    
     #State model
     for(j in 1:nsite){
       for(t in 1:nyear){
@@ -122,6 +134,7 @@
     }}
 
 
+    #mean density across all years
     for(j in 1:nsite){
       Density[j] <- sum(Density.jt[j,1:nyear])/nyear
     }
