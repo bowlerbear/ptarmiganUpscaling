@@ -2,13 +2,13 @@
   model{
 
   # State model
-  for (i in 1:nsite){ 
-    for (t in 1:nyear){
+  for (i in 1:nsite_train){ 
+    for (t in 1:nyear_train){
     
       z[i,t] ~ dbern(muZ[i,t]) 
       
-      logit(muZ[i,t])<- int.alpha + inprod(beta[],occDM[i,]) + 
-                          random.adm[adm[i]] + 
+      logit(muZ[i,t])<- int.alpha + inprod(beta[],occDM_train[i,]) + 
+                          random.adm[adm_train[i]] + 
                           random.year[t] +
                           eta[i]
       
@@ -16,24 +16,22 @@
   }   
   
   ### Observation Model
-  for(j in 1:nvisit) {
-    y[j] ~ dbern(Py[j]) #data is Y
-    Py[j]<- z[site[j],year[j]]*p[j] 
+  for(j in 1:nvisit_train) {
+    y_train[j] ~ dbern(Py[j]) #data is Y
+    Py[j]<- z[site_train[j],year_train[j]]*p[j] 
 
     #detection model:
       logit(p[j]) <-  int.d + 
-                      #beta.det.open * det.open[j] +
                       beta.effort * Effort[j] +
-                      #inprod(beta.det[],occDM[site[j],]) +
-                      random.det.year[year[j]] +
-                      random.det.adm[det.adm[j]]
+                      random.det.year[year_train[j]] +
+                      random.det.adm[det.adm_train[j]]
                       
     } 
   
-  #get mean z without year effect
-  for (i in 1:nsite){ 
-      grid.z[i] <- sum(z[i,])/nyear
-  } 
+  #predictions to new dataset
+  for(i in 1:nsite_test){
+    logit(pred.muZ[i])<- int.alpha + inprod(beta[],occDM_test[i,])
+  }
 
   #Priors 
 
@@ -49,21 +47,21 @@
     }
     
     #years
-    for(t in 1:nyear){
+    for(t in 1:nyear_train){
       random.year[t] ~ dnorm(0, tau.a)
     }
     tau.a <- 1/(sd.a * sd.a)
     sd.a ~ dt(0, 1, 1)T(0,) 
     
     #site effects
-    for (i in 1:nsite) {
+    for (i in 1:nsite_train) {
       eta[i] ~ dnorm(0, tau2)       
     } 
     tau2 <- 1/(sigma2 * sigma2) 
     sigma2 ~ dt(0, 1, 1)T(0,) 
 
     #adm effects
-    for(i in 1:n.adm){
+    for(i in 1:n.adm_train){
       random.adm[i] ~ dnorm(0,random.adm.tau)
     }
     random.adm.tau <- pow(random.adm.sd,-2)
@@ -75,7 +73,7 @@
     int.d <- logit(mean.p)
     
     #year effects
-    for (t in 1:nyear) {
+    for (t in 1:nyear_train) {
       random.det.year[t] ~ dnorm(0, tau.lp)            
     }
     tau.lp <- 1 / (sd.lp * sd.lp)                 
@@ -86,7 +84,7 @@
     beta.effort ~ dnorm(0,0.01)
     
     #adm effects
-    for(i in 1:n.adm){
+    for(i in 1:n.adm_train){
       random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
     }
     random.det.adm.tau <- pow(random.adm.sd,-2)
