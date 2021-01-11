@@ -303,7 +303,7 @@ library(jagsUI)
 params <- c("int.d","line.d.sd","year.d.sd",
             "beta","bpv","Density")
 
-modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
+modelfile <- paste(myfolder,"linetransectModel_variables_CV.txt",sep="/")
 
 out1 <- jags(bugs.data, 
              inits=NULL, 
@@ -318,35 +318,3 @@ out1 <- jags(bugs.data,
 saveRDS(out1$summary,file=paste0("outSummary_linetransectModel_variables_CV.rds",fold.id))
 
 ### end #######################################################
-
-### plotting map #################################################
-
-# #from full model
-# out1 <- readRDS("model-outputs/out1_linetransectModel_variables.rds")
-# print(out1$summary,3)
-# siteInfo$preds <- out1$mean$Density
-# mygrid[] <- NA
-# mygrid[siteInfo$grid] <- siteInfo$preds
-# plot(mygrid)
-# 
-# # using tmap package
-# crs(mygrid) <- equalM
-# #tmaptools::palette_explorer()
-# library(tmap)
-# tm_shape(mygrid)+
-#   tm_raster(title="Occupancy prob",palette="YlGnBu")
-# 
-# ### plotting coefficients #######################################
-# 
-# betas <- subset(out1,grepl("beta",out1$Param))
-# betas <- betas[1:8,]
-# betas$variables <- c("tree_line_position", "tree_line_position2","bio1","bio1_2", "bio6","elevation","prefopen", "open")
-# 
-# ggplot(betas)+
-#   geom_crossbar(aes(x=variables,y=mean,
-#                     ymin=X2.5.,ymax=X97.5.))+
-#   coord_flip()+
-#   theme_bw()+
-#   ylab("effect size on occupancy")+
-#   geom_hline(yintercept=0,color="red",
-#              linetype="dashed")
