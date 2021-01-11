@@ -55,7 +55,7 @@ library(sf)
 
 # import raster data
 #make each variable column a grid
-myVars <- names(siteInfo)[c(12:21,25:27)]
+myVars <- names(siteInfo)[c(11:20,24:30)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -69,9 +69,13 @@ projection(awt) <- equalM
 plot(awt)
 
 # import presence-absence species data
-PA <- siteInfo[!is.na(siteInfo$species),c("x","y","species")]
+speciesSummary <- ddply(siteInfo,.(grid,siteIndex),summarise,PA=max(y))
+siteInfo$species <- speciesSummary$PA[match(siteInfo$grid,speciesSummary$grid)]
+siteInfo <- merge(siteInfo,myGridDF,by.x="grid",by.y="layer")
+
 # make a SpatialPointsDataFrame object from data.frame
-pa_data <- st_as_sf(PA, coords = c("x", "y"), crs = st_crs(awt,asText=TRUE))
+PA <- siteInfo[!is.na(siteInfo$species),c("x","y.y","species")]
+pa_data <- st_as_sf(PA, coords = c("x", "y.y"), crs = st_crs(awt,asText=TRUE))
 # see the first few rows
 pa_data
 st_crs(pa_data)==st_crs(awt)
@@ -87,7 +91,7 @@ plot(pa_data)
 sb <- spatialBlock(speciesData = pa_data,
                    species = "species",
                    rasterLayer = awt,
-                   theRange = 200000, # size of the blocks
+                   theRange = 160000, # size of the blocks
                    k = 5,
                    selection = "random")
 
@@ -138,6 +142,12 @@ nrow(mydata) #sites with NA species data are excluded
 nrow(siteInfo)
 folds <- eb$foldID
 length(folds)
+
+#plot the folds
+siteInfo$folds <- sb$foldID
+qplot(x, y.y, data=siteInfo, colour=factor(folds))
+saveRDS(siteInfo[,c("grid","siteIndex","folds")],
+        file="data/folds_occModel.rds")
 
 #same order as in the siteInfo filer, as long as data with only presence/absence
 #records are used
