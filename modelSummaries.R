@@ -1,3 +1,25 @@
+### common grid ###########################################################
+
+#using a m grid
+equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
+
+#get Norway
+data(wrld_simpl)
+Norway <- subset(wrld_simpl,NAME=="Norway")
+NorwayOrig <- Norway
+Norway <- gBuffer(Norway,width=1)
+Norway <- spTransform(Norway,crs(equalM))
+NorwayOrigProj <- spTransform(NorwayOrig,crs(equalM))
+
+#create grid
+newres = 5000#5 km grid
+mygrid<-raster(extent(projectExtent(Norway,equalM)))
+res(mygrid) <- newres
+mygrid[] <- 1:ncell(mygrid)
+plot(mygrid)
+gridTemp <- mygrid
+myGridDF <- as.data.frame(mygrid,xy=T)
+
 ### occu models ##############################################
 
 ### plotting map #################################################
@@ -44,7 +66,7 @@ ggplot(betas)+
 
 ### distance models ##########################################
 
-
+out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
 
 
 
