@@ -7,7 +7,7 @@ library(maptools)
 #HPC
 myfolder <- "/data/idiv_ess/ptarmiganUpscaling" 
 #local
-myfolder <- "data"
+#myfolder <- "data"
 
 ### get norway##############################################################
 
@@ -127,15 +127,15 @@ inits <- function(){list(z = zst)}
 bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
                                   scale(siteInfo$tree_line_position^2) +
                                   scale(siteInfo$bio1) + 
-                                  scale(siteInfo$bio1^2) + 
-                                  scale(siteInfo$bio6) +
+                                  scale(siteInfo$bio5) +
                                   scale(siteInfo$elevation) +
-                                  scale(siteInfo$PrefOpen) + 
+                                  scale(siteInfo$Top) + 
                                   scale(siteInfo$Open))[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
-params <- c("mean.p","beta","beta.effort","beta.det.open","grid.z")
+params <- c("mean.p","beta","beta.effort","beta.det.open",
+            "grid.z","grid.psi")
 
 modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
 
