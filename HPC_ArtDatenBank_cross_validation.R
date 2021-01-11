@@ -5,6 +5,11 @@ library(ggplot2)
 library(rgeos)
 library(plyr)
 
+#HPC
+myfolder <- "/data/idiv_ess/ptarmiganUpscaling" 
+#local
+myfolder <- "data"
+
 ### get norway##############################################################
 
 #using a m grid
@@ -32,14 +37,14 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 #source('formattingArtDatenBank_missing_data.R')
 
 #read in list length object (made on the Rstudio server)
-listlengthDF <- readRDS("/data/idiv_ess/ptarmiganUpscaling/listlength_iDiv.rds")
+listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
 
 ### subset ##########################################################
 
 #subset to focal grids and those with environ covariate data
 
-focusGrids <- readRDS("/data/idiv_ess/ptarmiganUpscaling/focusGrids.rds")
-varDF <- readRDS("/data/idiv_ess/ptarmiganUpscaling/varDF_allEnvironData_5km_idiv.rds")
+focusGrids <- readRDS(paste(myfolder,"focusGrids.rds",sep="/"))
+varDF <- readRDS(paste(myfolder,"varDF_allEnvironData_5km_idiv.rds",sep="/"))
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
 
@@ -60,18 +65,19 @@ listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
 
 #remove missing observations
 listlengthDF <- subset(listlengthDF,!is.na(y))
+siteInfo <- subset(listlengthDF,!duplicated(grid))
 
 ### folds #############################################################
 
-folds <- readRDS("data/folds_occuModels.rds")
+folds <- readRDS(paste(myfolder,"folds_occModel.rds",sep="/"))
 listlengthDF$fold <- folds$fold[match(listlengthDF$grid,folds$grid)]
 
 #select fold of this task
 fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
 
 #split intp test and train
-listlengthDF_test <- subset(listlength,fold == fold.id)
-listlengthDF_train<- subset(listlength,fold != fold.id)
+listlengthDF_test <- subset(listlengthDF,fold == fold.id)
+listlengthDF_train<- subset(listlengthDF,fold != fold.id)
 
 ### indices #####################################################################
 
@@ -93,7 +99,8 @@ siteInfo_train <- subset(listlengthDF_train,!duplicated(grid))
 
 #for BUGS
 
-bugs.data <- list(nsite_test = length(unique(listlengthDF_test$siteIndex)),
+bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
+                  nsite_test = length(unique(listlengthDF_test$siteIndex)),
                   nsite_train = length(unique(listlengthDF_train$siteIndex)),
                   nyear_test = length(unique(listlengthDF_test$yearIndex)),
                   nyear_train = length(unique(listlengthDF_train$yearIndex)),
@@ -108,38 +115,13 @@ bugs.data <- list(nsite_test = length(unique(listlengthDF_test$siteIndex)),
                   y_test = listlengthDF_test$y,
                   y_train = listlengthDF_train$y,
                   #add an adm effect
-                  adm = siteInfo$admN,
-                  det.adm = listlengthDF$admN,
-                  det.open = scale(listlengthDF$Open),
-                  n.adm = length(unique(siteInfo$admN)),
+                  adm_train = siteInfo_train$admN,
+                  det.adm_train = listlengthDF_train$admN,
+                  det.open_train = scale(listlengthDF_train$Open),
+                  n.adm_train = length(unique(siteInfo_train$admN)),
                   adm2 = siteInfo$admN2,
-                  det.adm2 = listlengthDF$admN2,
-                  n.adm2 = length(unique(siteInfo$admN2)),
-                  #environcovs
-                  bio1_test = scale(siteInfo_test$bio1),
-                  bio1_train = scale(siteInfo_train$bio1),
-                  bio1_2_test = scale(siteInfo_test$bio1^2),
-                  bio1_2_train = scale(siteInfo_train$bio1^2),
-                  bio6_test = scale(siteInfo_test$bio6),
-                  bio6_train = scale(siteInfo_train$bio6),
-                  bio5_test = scale(siteInfo_test$bio5),
-                  bio5_train = scale(siteInfo_train$bio5),
-                  forest_test = scale(siteInfo_test$Forest),
-                  forest_train = scale(siteInfo_train$Forest),
-                  open_test = scale(siteInfo_test$Open),
-                  open_train = scale(siteInfo_train$Open),
-                  prefopen_test = scale(log(siteInfo_test$PrefOpen+1)),
-                  prefopen_train = scale(log(siteInfo_train$PrefOpen+1)),
-                  prefclosed_test = scale(log(siteInfo_test$PrefClosed+1)),
-                  prefclosed_train = scale(log(siteInfo_train$PrefClosed+1)),
-                  top_test = scale(log(siteInfo_test$Top+1)),
-                  top_train = scale(log(siteInfo_train$Top+1)),
-                  elevation_test = scale(siteInfo_test$elevation),
-                  elevation_train = scale(siteInfo_train$elevation),
-                  tree_line_position_test = scale(siteInfo_test$tree_line_position),
-                  tree_line_position_train = scale(siteInfo_train$tree_line_position),
-                  tree_line_position2_test = scale(siteInfo_test$tree_line_position^2),
-                  tree_line_position2_train = scale(siteInfo_train$tree_line_position^2))
+                  det.adm2_train = listlengthDF_train$admN2,
+                  n.adm2 = length(unique(siteInfo$admN2)))
 
 #bugs.data_ArtsDaten <- bugs.data
 
@@ -161,32 +143,47 @@ zst <- reshape2::acast(listlengthDF_train,
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
+### scale vars #################################################################
+
+siteInfo$tree_line_position <- scale(siteInfo$tree_line_position)
+siteInfo$bio1 <- scale(siteInfo$bio1)
+siteInfo$bio5 <- scale(siteInfo$bio5)
+siteInfo$bio6 <- scale(siteInfo$bio6)
+siteInfo$elevation <- scale(siteInfo$elevation)
+siteInfo$PrefOpen <- scale(siteInfo$PrefOpen)
+siteInfo$Open <- scale(siteInfo$Open)
+siteInfo$Top <- scale(siteInfo$Top)
+
+siteInfo_test <- subset(listlengthDF_test,!duplicated(grid))
+siteInfo_train <- subset(listlengthDF_train,!duplicated(grid))
+
+
 ### fit model ########################################################
 
 #specify model structure
-bugs.data$occDM_train <- model.matrix(~ bugs.data$tree_line_position_train + 
-                                  bugs.data$tree_line_position2_train +
-                                  bugs.data$bio1_train + 
-                                  bugs.data$bio1_2_train + 
-                                  bugs.data$bio6_train +
-                                  bugs.data$elevation_train +
-                                  bugs.data$prefopen_train + 
-                                  bugs.data$open_train)[,-1]
+bugs.data$occDM_train <- model.matrix(~ siteInfo_train$tree_line_position + 
+                                  siteInfo_train$tree_line_position^2 +
+                                  siteInfo_train$bio1 + 
+                                  siteInfo_train$bio5 + 
+                                  siteInfo_train$bio6 +
+                                  siteInfo_train$elevation +
+                                  siteInfo_train$Open + 
+                                  siteInfo_train$Top)[,-1]
 
-bugs.data$occDM_test <- model.matrix(~ bugs.data$tree_line_position_test + 
-                                        bugs.data$tree_line_position2_test +
-                                        bugs.data$bio1_test + 
-                                        bugs.data$bio1_2_test + 
-                                        bugs.data$bio6_test +
-                                        bugs.data$elevation_test +
-                                        bugs.data$prefopen_test + 
-                                        bugs.data$open_test)[,-1]
+bugs.data$occDM_test <- model.matrix(~ siteInfo_test$tree_line_position + 
+                                        siteInfo_test$tree_line_position^2 +
+                                        siteInfo_test$bio1 + 
+                                        siteInfo_test$bio5 + 
+                                        siteInfo_test$bio6 +
+                                        siteInfo_test$elevation +
+                                        siteInfo_test$Open + 
+                                        siteInfo_test$Top)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM_test)
 
-params <- c("mean.p","beta","beta.effort","beta.det.open","grid.z")
+params <- c("mean.p","beta","beta.effort","beta.det.open","pred.muZ")
 
-modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling_crossvalid.txt"
+modelfile <- paste(myfolder,"BUGS_occuModel_upscaling_CV.txt",sep="/")
 
 n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 
@@ -202,4 +199,4 @@ out1 <- jags(bugs.data,
              n.iter = n.iterations,
              parallel = T)
 
-saveRDS(out1$summary,file="outSummary_occModel_upscaling_crossvalid.rds")
+saveRDS(out1$summary,file="outSummary_occModel_upscaling_CV.rds")
