@@ -13,7 +13,8 @@
 
     for(i in 1:ndetections){
     #linear predictor
-    mu.df[i] <- b.df.0 + b.group.size * log.detectionGroupSize[i] 
+    #mu.df[i] <- b.df.0 + b.group.size * log.detectionGroupSize[i] 
+    mu.df[i] <- b.df.0  
     
     # estimate of sd and var, given coeffs above
     sig.df[i] <- exp(mu.df[i])
@@ -34,47 +35,13 @@
     #using this model and predicted group size (below), get predicted ESW 
     for(t in 1:nyear){
       for(j in 1:nsite){
-        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(predGroupSize[j,t]+1)) 
+        #pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(predGroupSize[j,t]+1)) 
+        pred.sig[j,t] <- exp(b.df.0)
         pred.sig2[j,t] <- pow(pred.sig[j,t],2)
         predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
       }
     }
 
-    ##################
-    #Group size model#
-    ##################
-
-    #priors
-    int.gs ~ dnorm(0,0.001)    
-    
-    #random line effect
-    line.sd ~ dunif(0,10)
-    line.tau <- pow(line.sd,-2)
-    for(j in 1:nsite){
-      random.gs.line[j] ~ dnorm(0,line.tau)
-    }
-    
-    #random time effect
-    year.sd ~ dunif(0,10)
-    year.tau <- pow(year.sd,-2)
-    for(t in 1:nyear){
-      random.gs.year[t] ~ dnorm(0,year.tau)
-    }
-
-    #Model
-    #for each detection, model group size
-    for(i in 1:ndetections){
-      GroupSize[i] ~ dpois(expGroupSize[i])
-      log(expGroupSize[i]) <- int.gs + random.gs.year[detectionYear[i]] + 
-                                      random.gs.line[detectionSite[i]] 
-    }
-
-    #using this model, get predicted group size for each line and year
-    for(t in 1:nyear){
-      for(j in 1:nsite){
-        log(predGroupSize[j,t]) <- int.gs + random.gs.year[t] + random.gs.line[j] 
-      }
-    }
 
     ########################
     #Model of total density#
@@ -102,8 +69,7 @@
       beta[i] ~ dnorm(0,0.1)
     }
 
-      
-    #Work out the fraction of the both that was surveyed
+    #Work out the fraction that was surveyed
     for(j in 1:nsite){
       for(t in 1:nyear){
         surveyArea[j,t] <- TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
@@ -111,12 +77,12 @@
       }
     }
 
-
     #Observation model:
     for(j in 1:nsite){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- Density.jt[j,t] * surveyFraction[j,t]
+        expNuIndivs[j,t] <- exp.Density.jt[j,t] * surveyFraction[j,t]
+        exp.Density.jt[j,t] ~ dpois(Density.jt[j,t]) 
       }
     }
     
@@ -132,11 +98,11 @@
                             inprod(beta[],occDM[j,]) 
 
     }}
-
-
+    
+  
     #mean density across all years
-    for(j in 1:nsite){
-      Density[j] <- sum(Density.jt[j,1:nyear])/nyear
+    for(j in 1:npreds){
+      log(Density[j]) <- int.d + inprod(beta[],predDM[j,])
     }
 
     #calculate the Bayesian p-value
