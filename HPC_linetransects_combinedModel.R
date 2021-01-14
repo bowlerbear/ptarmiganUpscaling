@@ -183,27 +183,34 @@ tlDF$groupSize[tlDF$length>0 & is.na(tlDF$groupSize)] <- 0
 siteInfo_ArtsDaten <- readRDS(paste(myfolder,
                                     "siteInfo_ArtsDaten.rds",sep="/"))
 
-### extend to whole grid ############################################
+### choice 1: observed grids ###
 
-#add all the grids we wish to impute for
-newgrid <- expand.grid(Year = unique(tlDF$Year),
-                     grid = siteInfo_ArtsDaten$grid)
-tlDF <- merge(newgrid,tlDF,by=c("Year","grid"),all.x=T)
+tlDF$siteIndex <- as.numeric(as.factor(tlDF$grid))
+tlDF <- subset(tlDF,grid %in% focusGrids)
 
-#add zero transect length info
-tlDF$length[is.na(tlDF$length)] <- 0
-
-#add site index data
-tlDF$siteIndex <- siteInfo_ArtsDaten$siteIndex[match(tlDF$grid,siteInfo_ArtsDaten$grid)]
-tlDF <- arrange(tlDF,siteIndex,Year)
-
-#plot where we have data
-#dataPresent <- subset(myGridDF,layer%in%tlDF$grid[!is.na(tlDF$totalsInfo)])
-#qplot(x,y,data=dataPresent)
-
-### make siteInfo ##################################################
+### choice 2: all grids####
+#extend to whole grid 
+# 
+# #add all the grids we wish to impute for
+# newgrid <- expand.grid(Year = unique(tlDF$Year),
+#                      grid = siteInfo_ArtsDaten$grid)
+# tlDF <- merge(newgrid,tlDF,by=c("Year","grid"),all.x=T)
+# 
+# #add zero transect length info
+# tlDF$length[is.na(tlDF$length)] <- 0
+# 
+# #add site index data
+# tlDF$siteIndex <- siteInfo_ArtsDaten$siteIndex[match(tlDF$grid,siteInfo_ArtsDaten$grid)]
+# tlDF <- arrange(tlDF,siteIndex,Year)
+# 
+# #plot where we have data
+# #dataPresent <- subset(myGridDF,layer%in%tlDF$grid[!is.na(tlDF$totalsInfo)])
+# #qplot(x,y,data=dataPresent)
+# 
+### make siteInfo ######################################
 
 siteInfo <- unique(tlDF[,c("grid","siteIndex")])
+siteInfo <- arrange(siteInfo,grid)
 
 #make indices the same as in the Artsdatenbank data
 siteInfo$admN <- siteInfo_ArtsDaten$admN[match(siteInfo$grid,siteInfo_ArtsDaten$grid)]
@@ -224,9 +231,12 @@ transectLengths <- reshape2::acast(tlDF,siteIndex~Year,value.var="length")
 #put NAs where transect length is zero
 groupInfo[transectLengths==0] <- NA
 totalsInfo[transectLengths==0] <- NA
-
 sum(as.numeric(totalsInfo),na.rm=T)
 #61993
+
+#put nominal transect length value in
+#medL = median(transectLengths[transectLengths!=0])
+#transectLengths[transectLengths==0] <- medL
 
 #check alignment with other datasets
 all(row.names(groupInfo)==siteInfo$siteIndex)
@@ -257,7 +267,6 @@ bugs.data <- list(#For the state model
   y = allDetections$LinjeAvstand,
   ln_GroupSize = log(allDetections$totalIndiv+1),
   GroupSize = allDetections$totalIndiv,
-  log.detectionGroupSize = log(allDetections$totalIndiv),
   detectionYear = allDetections$yearIndex,
   detectionSite = allDetections$siteIndex,
   zeros.dist = rep(0,nrow(allDetections)))
@@ -268,19 +277,33 @@ bugs.data_LineTransects <- bugs.data
 
 ### get environ data #########################################
 
-varDF <- unique(varDF)
-siteInfo <- merge(siteInfo,varDF,by="grid",all.x=T,sort=FALSE)
+environData <- siteInfo_ArtsDaten[,c(12:33)]
+environData <- plyr::numcolwise(scale)(environData)
+environData$grid <- siteInfo_ArtsDaten$grid
+environData$surveys <- sapply(environData$grid,function(x)
+  ifelse(x %in% siteInfo$grid,1,0))
+visitedData <- subset(environData,surveys==1)
+all(siteInfo$grid==visitedData$grid)
 
 #add new variables to the bugs data
-bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
-                                  scale(siteInfo$tree_line_position^2) +
-                                  scale(siteInfo$bio1) + 
-                                  scale(siteInfo$bio5) +
-                                  scale(siteInfo$elevation) +
-                                  scale(siteInfo$Top) + 
-                                  scale(siteInfo$Open))[,-1]
+bugs.data$occDM <- model.matrix(~ visitedData$tree_line_position + 
+                                  visitedData$tree_line_position^2 +
+                                  visitedData$bio1 +
+                                  visitedData$bio1^2 +
+                                  visitedData$elevation +
+                                  visitedData$Top)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
+
+#also for predictions if different
+bugs.data$predDM <- model.matrix(~ environData$tree_line_position + 
+                                   environData$tree_line_position^2 +
+                                   environData$bio1 +
+                                   environData$bio1^2 +
+                                   environData$elevation +
+                                   environData$Top)[,-1]
+
+bugs.data$npreds <- nrow(environData)
 
 ### fit model #################################################
 
@@ -298,8 +321,8 @@ out1 <- jags(bugs.data,
              modelfile, 
              n.thin=10,
              n.chains=3, 
-             n.burnin=10000,
-             n.iter=20000,
+             n.burnin=20000,
+             n.iter=40000,
              parallel=T)
 
 saveRDS(out1$summary,file="outSummary_linetransectModel_variables.rds")
