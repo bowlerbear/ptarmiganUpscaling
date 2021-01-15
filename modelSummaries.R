@@ -84,6 +84,7 @@ ggplot(betas)+
 ### distance models ##########################################
 
 siteInfo <- readRDS("data/siteInfo_LineTransects.rds")
+environData <- readRDS("data/environData.rds")
 
 ### plot map ##############################################
 
@@ -91,9 +92,9 @@ out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("Density",out1$Param))
-siteInfo$preds <- log(preds$mean)
+environData$preds <- preds$mean
 mygrid[] <- NA
-mygrid[siteInfo$grid] <- siteInfo$preds
+mygrid[environData$grid] <- environData$preds
 plot(mygrid)
 
 # using tmap package
@@ -101,7 +102,7 @@ crs(mygrid) <- equalM
 #tmaptools::palette_explorer()
 library(tmap)
 tm_shape(mygrid)+
-  tm_raster(title="log_Density",palette="YlGnBu")
+  tm_raster(title="Density",palette="YlGnBu")
 
 ### plot coefficients #####################################
 
