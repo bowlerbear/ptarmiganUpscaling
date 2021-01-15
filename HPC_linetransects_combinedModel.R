@@ -178,6 +178,16 @@ tlDF$nuGroups[tlDF$length>0 & is.na(tlDF$nuGroups)] <- 0
 tlDF$totalsInfo[tlDF$length>0 & is.na(tlDF$totalsInfo)] <- 0
 tlDF$groupSize[tlDF$length>0 & is.na(tlDF$groupSize)] <- 0
 
+### drop absent gruds ##############################################
+
+missingGrids <- tlDF %>%
+                group_by(grid) %>%
+                summarise(nuSeen=sum(totalsInfo,na.rm=T)) %>%
+                filter(nuSeen==0)
+
+tlDF <- tlDF %>%
+        filter(!grid %in% missingGrids$grid)
+
 ### artdendaten bank site info ######################################
 
 siteInfo_ArtsDaten <- readRDS(paste(myfolder,
@@ -217,7 +227,7 @@ siteInfo$admN <- siteInfo_ArtsDaten$admN[match(siteInfo$grid,siteInfo_ArtsDaten$
 siteInfo$admN2 <- siteInfo_ArtsDaten$admN2[match(siteInfo$grid,siteInfo_ArtsDaten$grid)]
 
 #give a unique name
-siteInfo_LineTransects<-siteInfo
+siteInfo_LineTransects <- siteInfo
 #saveRDS(siteInfo, "data/siteInfo_LineTransects.rds")
 
 ### make arrays ###################################################
@@ -243,7 +253,8 @@ all(row.names(groupInfo)==siteInfo$siteIndex)
 
 ### detection data ################################################
 
-allDetections <- allDataObs
+allDetections <- subset(allDataObs, grid %in% focusGrids &
+grid %in% tlDF$grid)
 allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$grid,siteInfo$grid)]
 allDetections$yearIndex <- as.numeric(factor(allDetections$Year))
 
@@ -266,7 +277,7 @@ bugs.data <- list(#For the state model
   ndetections = nrow(allDetections),
   y = allDetections$LinjeAvstand,
   ln_GroupSize = log(allDetections$totalIndiv+1),
-  GroupSize = allDetections$totalIndiv,
+  GroupSize = (allDetections$totalIndiv-1),#so it can start at 0
   detectionYear = allDetections$yearIndex,
   detectionSite = allDetections$siteIndex,
   zeros.dist = rep(0,nrow(allDetections)))
@@ -284,13 +295,18 @@ environData$surveys <- sapply(environData$grid,function(x)
   ifelse(x %in% siteInfo$grid,1,0))
 visitedData <- subset(environData,surveys==1)
 all(siteInfo$grid==visitedData$grid)
+#saveRDS(environData,file="data/environData.rds")
 
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ visitedData$tree_line_position + 
                                   visitedData$tree_line_position^2 +
                                   visitedData$bio1 +
                                   visitedData$bio1^2 +
+                                  visitedData$bio5 +
+                                  visitedData$bio5^2 +
                                   visitedData$elevation +
+                                  visitedData$elevation^2 +
+                                  visitedData$Open +
                                   visitedData$Top)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
@@ -300,7 +316,11 @@ bugs.data$predDM <- model.matrix(~ environData$tree_line_position +
                                    environData$tree_line_position^2 +
                                    environData$bio1 +
                                    environData$bio1^2 +
+                                   environData$bio5 +
+                                   environData$bio5^2 +
                                    environData$elevation +
+                                   environData$elevation^2 +
+                                   environData$Open +
                                    environData$Top)[,-1]
 
 bugs.data$npreds <- nrow(environData)
@@ -311,7 +331,7 @@ library(rjags)
 library(jagsUI)
 
 params <- c("int.d","line.d.sd","year.d.sd",
-            "beta","bpv","Density")
+            "beta","bpv","totalPop","Density")
 
 modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
 
