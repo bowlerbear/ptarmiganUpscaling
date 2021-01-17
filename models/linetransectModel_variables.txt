@@ -136,6 +136,11 @@
 
     }}
     
+    #for mean Density at observed sites
+    for(j in 1:nsite){
+      log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) 
+    }
+    
   
     #mean density across all years
     for(j in 1:npreds){
