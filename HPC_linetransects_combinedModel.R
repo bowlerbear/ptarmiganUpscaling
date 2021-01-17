@@ -298,28 +298,24 @@ all(siteInfo$grid==visitedData$grid)
 #saveRDS(environData,file="data/environData.rds")
 
 #add new variables to the bugs data
-bugs.data$occDM <- model.matrix(~ visitedData$tree_line_position + 
-                                  visitedData$tree_line_position^2 +
+bugs.data$occDM <- model.matrix(~ visitedData$tree_line +
+                                  I(visitedData$tree_line^2) +
                                   visitedData$bio1 +
-                                  visitedData$bio1^2 +
                                   visitedData$bio5 +
-                                  visitedData$bio5^2 +
                                   visitedData$elevation +
-                                  visitedData$elevation^2 +
+                                  I(visitedData$elevation^2) +
                                   visitedData$Open +
                                   visitedData$Top)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 #also for predictions if different
-bugs.data$predDM <- model.matrix(~ environData$tree_line_position + 
-                                   environData$tree_line_position^2 +
+bugs.data$predDM <- model.matrix(~ environData$tree_line +
+                                   I(environData$tree_line^2) +
                                    environData$bio1 +
-                                   environData$bio1^2 +
                                    environData$bio5 +
-                                   environData$bio5^2 +
-                                   environData$elevation +
-                                   environData$elevation^2 +
+                                   environData$elevation + 
+                                   I(environData$elevation^2) +
                                    environData$Open +
                                    environData$Top)[,-1]
 
@@ -331,7 +327,7 @@ library(rjags)
 library(jagsUI)
 
 params <- c("int.d","line.d.sd","year.d.sd",
-            "beta","bpv","totalPop","Density")
+            "beta","bpv","totalPop","Density","Dens_lt")
 
 modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
 
