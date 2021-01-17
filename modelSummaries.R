@@ -89,6 +89,8 @@ environData <- readRDS("data/environData.rds")
 ### plot map ##############################################
 
 out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
+out1[row.names(out1)=="totalPop",]
+
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("Density",out1$Param))
@@ -101,16 +103,30 @@ plot(mygrid)
 crs(mygrid) <- equalM
 #tmaptools::palette_explorer()
 library(tmap)
-tm_shape(mygrid)+
-  tm_raster(title="Density",palette="YlGnBu")
+tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
+  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
+  tm_layout(legend.position = c("left","top"))
+
+#over range of data
+preds <- subset(out1,grepl("Dens_lt",out1$Param))
+environData$preds <- NA
+environData$preds[environData$surveys==1] <- preds$mean
+summary(environData$preds)
+mygrid[] <- NA
+mygrid[environData$grid] <- environData$preds
+plot(mygrid)
+
+tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
+  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
+  tm_layout(legend.position = c("left","top"))
 
 ### plot coefficients #####################################
 
 betas <- subset(out1,grepl("beta",out1$Param))
-betas$variables <- c("bio1","open","tree_line_position", "tree_line_position2")
+betas$Param <- c("bio1","open","tree_line_position", "tree_line_position2")
 
 ggplot(betas)+
-  geom_crossbar(aes(x=variables,y=mean,
+  geom_crossbar(aes(x=Param,y=mean,
                     ymin=X2.5.,ymax=X97.5.))+
   coord_flip()+
   theme_bw()+
