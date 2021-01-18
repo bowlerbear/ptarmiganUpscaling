@@ -101,6 +101,17 @@
       random.d.year[t] ~ dnorm(0,year.d.tau)
     }
 
+    #random obs effects
+    random.d.sd ~ dunif(0,10)
+    random.d.tau <- pow(random.d.sd,-2)
+    for(t in 1:nyear){
+      for(j in 1:nsite){
+        random.d.obs[j,t] ~ dnorm(0,random.d.tau)
+      }
+    }
+
+    
+
     #covariate effects
     for(i in 1:n.covs){
       beta[i] ~ dnorm(0,0.1)
@@ -132,6 +143,7 @@
         log(Density.jt[j,t]) <- int.d + 
                             random.d.line[j] + 
                             random.d.year[t] +
+                            random.d.obs[j,t] +
                             inprod(beta[],occDM[j,]) 
 
     }}
