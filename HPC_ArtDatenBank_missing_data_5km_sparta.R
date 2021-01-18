@@ -121,6 +121,8 @@ zst <- reshape2::acast(listlengthDF, siteIndex~yearIndex, value.var="y",fun=max,
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
+#saveRDS(zst,file="data/zst_ArtsDaten.rds")
+
 ### fit model ########################################################
 
 #specify model structure
@@ -129,10 +131,12 @@ bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) +
                                   scale(siteInfo$bio1) + 
                                   scale(siteInfo$bio5) +
                                   scale(siteInfo$elevation) +
+                                  scale(siteInfo$elevation^2) +
                                   scale(siteInfo$Top) + 
                                   scale(siteInfo$Open))[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
+#saveRDS(bugs.data,file="data/bugs.data_ArtsDaten.rds")
 
 params <- c("mean.p","beta","beta.effort","beta.det.open",
             "grid.z","grid.psi")
