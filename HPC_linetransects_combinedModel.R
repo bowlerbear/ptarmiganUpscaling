@@ -299,11 +299,9 @@ all(siteInfo$grid==visitedData$grid)
 
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ visitedData$tree_line +
-                                  I(visitedData$tree_line^2) +
                                   visitedData$bio1 +
                                   visitedData$bio5 +
                                   visitedData$elevation +
-                                  I(visitedData$elevation^2) +
                                   visitedData$Open +
                                   visitedData$Top)[,-1]
 
@@ -311,15 +309,15 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 #also for predictions if different
 bugs.data$predDM <- model.matrix(~ environData$tree_line +
-                                   I(environData$tree_line^2) +
                                    environData$bio1 +
                                    environData$bio5 +
                                    environData$elevation + 
-                                   I(environData$elevation^2) +
                                    environData$Open +
                                    environData$Top)[,-1]
 
 bugs.data$npreds <- nrow(environData)
+
+#saveRDS(bugs.data,file="data/bugs.data_linetransects.rds")
 
 ### fit model #################################################
 
