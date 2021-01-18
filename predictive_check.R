@@ -52,10 +52,12 @@ library(blockCV)
 # loading raster library
 library(raster)
 library(sf)
+library(plyr)
+siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data
 #make each variable column a grid
-myVars <- names(siteInfo)[c(11:20,24:30)]
+myVars <- names(siteInfo)[c(12:21,25:31)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -91,7 +93,7 @@ plot(pa_data)
 sb <- spatialBlock(speciesData = pa_data,
                    species = "species",
                    rasterLayer = awt,
-                   theRange = 160000, # size of the blocks
+                   theRange = 150000, # size of the blocks
                    k = 5,
                    selection = "random")
 
