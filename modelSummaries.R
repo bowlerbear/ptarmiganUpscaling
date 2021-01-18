@@ -104,7 +104,7 @@ crs(mygrid) <- equalM
 #tmaptools::palette_explorer()
 library(tmap)
 tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
+  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu",n=10)+
   tm_layout(legend.position = c("left","top"))
 
 #over range of data
@@ -114,7 +114,6 @@ environData$preds[environData$surveys==1] <- preds$mean
 summary(environData$preds)
 mygrid[] <- NA
 mygrid[environData$grid] <- environData$preds
-plot(mygrid)
 
 tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
   tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
