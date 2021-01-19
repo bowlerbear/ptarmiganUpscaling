@@ -95,6 +95,8 @@ out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("Density",out1$Param))
 environData$preds <- preds$mean
+environData$predsSD <- preds$sd
+
 mygrid[] <- NA
 mygrid[environData$grid] <- environData$preds
 plot(mygrid)
@@ -119,6 +121,21 @@ tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
   tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
   tm_layout(legend.position = c("left","top"))
 
+#uncertainty
+environData$Uncertain <- environData$preds/environData$predsSD 
+mygrid[] <- NA
+mygrid[environData$grid] <- environData$Uncertain
+plot(mygrid)
+
+# using tmap package
+crs(mygrid) <- equalM
+#tmaptools::palette_explorer()
+library(tmap)
+tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
+  tm_shape(mygrid)+ tm_raster(title = "Density uncertainty",
+                              style="pretty")+
+  tm_layout(legend.position = c("left","top"))
+
 ### plot coefficients #####################################
 
 betas <- subset(out1,grepl("beta",out1$Param))
@@ -133,6 +150,54 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
+
+#### combined model #####################################
+
+out1 <- readRDS("model-outputs/outSummary_simpleCombinedModel.rds")
+out1[row.names(out1)=="totalAbund",]
+
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+preds <- subset(out1,grepl("realAbund",out1$Param))
+environData$preds <- preds$mean
+environData$predsSD <- preds$sd
+
+mygrid[] <- NA
+mygrid[environData$grid] <- environData$preds
+plot(mygrid)
+
+# using tmap package
+crs(mygrid) <- equalM
+#tmaptools::palette_explorer()
+library(tmap)
+tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
+  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu",n=10)+
+  tm_layout(legend.position = c("left","top"))
+
+#over range of data
+preds <- subset(out1,grepl("Dens_lt",out1$Param))
+environData$preds <- NA
+environData$preds[environData$surveys==1] <- preds$mean
+summary(environData$preds)
+mygrid[] <- NA
+mygrid[environData$grid] <- environData$preds
+
+tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
+  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
+  tm_layout(legend.position = c("left","top"))
+
+#uncertainty
+environData$predsSD <- preds$mean/preds$sd
+mygrid[] <- NA
+mygrid[environData$grid] <- environData$predsSD
+plot(mygrid)
+
+# using tmap package
+crs(mygrid) <- equalM
+#tmaptools::palette_explorer()
+library(tmap)
+tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
+  tm_shape(mygrid)+ tm_raster(title = "Density uncertainty")+
+  tm_layout(legend.position = c("left","top"))
+
 ### end #################################################
-
-
