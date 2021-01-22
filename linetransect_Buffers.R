@@ -65,7 +65,7 @@ lineCentres <- gCentroid(spTemp,byid=TRUE)@coords
 makePolygon <- function(x){
   myCentre <- data.frame(t(x))
   coordinates(myCentre) <- c("x","y")
-  myPoly <- gBuffer(myCentre,width=2500)
+  myPoly <- gBuffer(myCentre,width=2821)#sqrt(25/pi)
   return(myPoly)
 }
 p <- apply(lineCentres,1,makePolygon)
