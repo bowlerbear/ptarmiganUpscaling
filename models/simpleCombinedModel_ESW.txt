@@ -1,0 +1,189 @@
+
+    model{
+
+    ########################
+    #Model of total density#
+    ########################
+  
+    #intercept
+    int.d ~ dnorm(0,0.001)    
+    
+    #random line effect
+    line.d.sd ~ dunif(0,10)
+    line.d.tau <- pow(line.d.sd,-2)
+    for(j in 1:nsiteLT){
+      random.d.line[j] ~ dnorm(0,line.d.tau)
+    }
+    
+    #random year effect
+    year.d.sd ~ dunif(0,10)
+    year.d.tau <- pow(year.d.sd,-2)
+    for(t in 1:nyearLT){
+      random.d.year[t] ~ dnorm(0,year.d.tau)
+    }
+    
+    #random obs effects
+    random.d.sd ~ dunif(0,10)
+    random.d.tau <- pow(random.d.sd,-2)
+    for(t in 1:nyearLT){
+      for(j in 1:nsiteLT){
+        random.d.obs[j,t] ~ dnorm(0,random.d.tau)
+      }
+    }
+
+    #covariate effects
+    for(i in 1:n.covsLT){
+      beta[i] ~ dnorm(0,0.1)
+    }
+
+    #Work out the fraction that was surveyed
+    for(j in 1:nsiteLT){
+      for(t in 1:nyearLT){
+        surveyArea[j,t] <- TransectLengthLT[j,t]/1000 * 106/1000 * 2
+        surveyFraction[j,t] <- surveyArea[j,t]/25
+      }
+    }
+
+    #Observation model:
+    for(j in 1:nsiteLT){
+      for(t in 1:nyearLT){
+        NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
+        expNuIndivs[j,t] <- exp.Density.jt[j,t] * surveyFraction[j,t]
+        exp.Density.jt[j,t] ~ dpois(Density.jt[j,t]) 
+      }
+    }
+    
+    
+    #State model
+    for(j in 1:nsiteLT){
+      for(t in 1:nyearLT){
+      
+      #linear predictor on density
+        log(Density.jt[j,t]) <- int.d + 
+                            random.d.line[j] + 
+                            random.d.year[t] +
+                            random.d.obs[j,t] +
+                            inprod(beta[],occDM[j,]) 
+
+    }}
+    
+  #predict for all sites
+  for(j in 1:npredsLT){
+    for(t in 1:nyearLT){
+      log(Density[j,t]) <- int.d + 
+                            random.d.year[t] +
+                            inprod(beta[],predDMLT[j,]) 
+    }
+  }
+    
+    
+  # Occupancy model
+  
+  # State model
+  for (i in 1:nsite){ 
+    for (t in 1:nyear){
+    
+      z[i,t] ~ dbern(muZ[i,t]) 
+      
+      logit(muZ[i,t])<- int.alpha + inprod(beta.occ[],occDM[i,]) + 
+                          random.adm[adm[i]] + 
+                          random.year[t] +
+                          eta[i]
+      
+    }
+  }   
+  
+  ### Observation Model
+  for(j in 1:nvisit) {
+    y[j] ~ dbern(Py[j]) #data is Y
+    Py[j]<- z[site[j],year[j]]*p[j] 
+
+    #detection model:
+      logit(p[j]) <-  int.det + 
+                      #beta.det.open * det.open[j] +
+                      beta.effort * Effort[j] +
+                      #inprod(beta.det[],occDM[site[j],]) +
+                      random.det.year[year[j]] +
+                      random.det.adm[det.adm[j]]
+                      
+    } 
+  
+  #get mean z without year effect
+  for (i in 1:nsite){ 
+      grid.z[i] <- sum(z[i,])/nyear
+      grid.psi[i] <- sum(muZ[i,])/nyear
+  } 
+
+  #Priors 
+
+  # State model priors
+    ############################
+    
+    #intercept
+    mean.psi ~ dunif(0, 1)       
+    int.alpha <- logit(mean.psi)
+ 
+    for(i in 1:n.covs){
+      beta.occ[i] ~ dnorm(0,0.01)
+    }
+    
+    #years
+    for(t in 1:nyear){
+      random.year[t] ~ dnorm(0, tau.a)
+    }
+    tau.a <- 1/(sd.a * sd.a)
+    sd.a ~ dt(0, 1, 1)T(0,) 
+    
+    #site effects
+    for (i in 1:nsite) {
+      eta[i] ~ dnorm(0, tau2)       
+    } 
+    tau2 <- 1/(sigma2 * sigma2) 
+    sigma2 ~ dt(0, 1, 1)T(0,) 
+
+    #adm effects
+    for(i in 1:n.adm){
+      random.adm[i] ~ dnorm(0,random.adm.tau)
+    }
+    random.adm.tau <- pow(random.adm.sd,-2)
+    random.adm.sd ~ dt(0, 1, 1)T(0,) 
+
+    #Observation model priors
+    ##########################
+    mean.p ~ dunif(0, 1)        
+    int.det <- logit(mean.p)
+    
+    #year effects
+    for (t in 1:nyear) {
+      random.det.year[t] ~ dnorm(0, tau.lp)            
+    }
+    tau.lp <- 1 / (sd.lp * sd.lp)                 
+    sd.lp ~ dt(0, 1, 1)T(0,)  
+    
+    #covariate effects
+    beta.det.open ~ dnorm(0,0.01)
+    beta.effort ~ dnorm(0,0.01)
+    
+    #adm effects
+    for(i in 1:n.adm){
+      random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
+    }
+    random.det.adm.tau <- pow(random.adm.sd,-2)
+    random.det.adm.sd ~ dt(0, 1, 1)T(0,) 
+
+
+    #sum across
+    for (i in 1:nsite){ 
+      for (t in 1:nyear){
+    
+      realAbund.jt[i,t] <- Density[i,t] * muZ[i,t]
+    
+    }
+      realAbund[i] <- sum(realAbund.jt[i,])/nyear
+    
+  } 
+
+    totalAbund <- sum(realAbund)
+    
+    }
+    
