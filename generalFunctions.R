@@ -59,8 +59,9 @@ mergeCounties <- function(x,further=FALSE){
   x[x %in% c("Finnmark","Troms")] <- "Troms og Finnmark"
   
   if(further==TRUE){
-    x[x %in% c("Adger","Rogaland","Møre og Romsdal","Vestland")] <- "Adger/Rogaland/Vestfold/Telemark/Vestland/Viken"  
-    x[x %in% c("Vestfold og Telemark","Viken")] <- "Adger/Rogaland/Vestfold/Telemark/Vestland/Viken"
+    x[x %in% c("Adger","Rogaland","Vestland")] <- "Adger/Rogaland/Vestfold/Telemark/Viken"  
+    x[x %in% c("Vestfold og Telemark","Viken")] <- "Adger/Rogaland/Vestfold/Telemark/Viken"
+    x[x %in% c("Møre og Romsdal","Vestland")] <- "Innlandet"
     
   }
   
