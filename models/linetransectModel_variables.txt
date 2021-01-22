@@ -1,85 +1,6 @@
 
     model{
 
-    #################
-    #Detection model#
-    #################
-    
-    pi <- 3.141593
-    
-    # priors for fixed effect parms for half-normal detection parm sigma
-    b.df.0 ~ dunif(0,20)        
-    b.group.size ~ dnorm(0,0.001)
-
-    for(i in 1:ndetections){
-    #linear predictor
-    mu.df[i] <- b.df.0 + b.group.size * ln_GroupSize[i] 
-    #mu.df[i] <- b.df.0  
-    
-    # estimate of sd and var, given coeffs above
-    sig.df[i] <- exp(mu.df[i])
-    sig2.df[i] <- sig.df[i]*sig.df[i]
-    
-    # effective strip width
-    esw[i] <- sqrt(pi * sig2.df[i] / 2) 
-    f0[i] <- 1/esw[i] #assuming all detected on the line
-    
-    # LIKELIHOOD
-    # using zeros trick
-    #y[i] ~ dunif(0,W) 
-    L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
-    nlogL.f0[i] <-  -log(L.f0[i])
-    zeros.dist[i] ~ dpois(nlogL.f0[i])
-    }
-
-    #using this model and predicted group size (below), get predicted ESW 
-    for(t in 1:nyear){
-      for(j in 1:nsite){
-        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(predGroupSize[j,t]+1)) 
-        #pred.sig[j,t] <- exp(b.df.0)
-        pred.sig2[j,t] <- pow(pred.sig[j,t],2)
-        predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
-      }
-    }
-
-    ##################
-    #Group size model#
-    ##################
-    
-    #priors
-    int.gs ~ dnorm(0,0.001)    
-    
-    #random line effect
-    site.sd ~ dunif(0,10)
-    site.tau <- pow(site.sd,-2)
-    for(j in 1:nsite){
-      random.gs.site[j] ~ dnorm(0,site.tau)
-    }
-    
-    #random year effect
-    year.sd ~ dunif(0,10)
-    year.tau <- pow(year.sd,-2)
-    for(t in 1:nyear){
-      random.gs.year[t] ~ dnorm(0, year.tau)
-    }
-    
-    #Model
-    #for each detection, model group size
-    for(i in 1:ndetections){
-      GroupSize[i] ~ dpois(expGroupSize[i])
-      log(expGroupSize[i]) <- int.gs + 
-      random.gs.year[detectionYear[i]] + 
-      random.gs.site[detectionSite[i]] 
-    }
-    
-    #using this model, get predicted group size for each line and year
-    for(t in 1:nyear){
-      for(j in 1:nsite){
-        log(predGroupSize[j,t]) <- int.gs + random.gs.year[t] + random.gs.site[j] 
-      }
-    }
-
-
     ########################
     #Model of total density#
     ########################
@@ -92,6 +13,13 @@
     line.d.tau <- pow(line.d.sd,-2)
     for(j in 1:nsite){
       random.d.line[j] ~ dnorm(0,line.d.tau)
+    }
+    
+    #random adm effect
+    adm.d.sd ~ dunif(0,10)
+    adm.d.tau <- pow(adm.d.sd,-2)
+    for(j in 1:nadm){
+      random.d.adm[j] ~ dnorm(0,adm.d.tau)
     }
     
     #random year effect
@@ -110,30 +38,20 @@
       }
     }
 
-    
-
+  
     #covariate effects
     for(i in 1:n.covs){
       beta[i] ~ dnorm(0,0.1)
     }
 
-    #Work out the fraction that was surveyed
-    for(j in 1:nsite){
-      for(t in 1:nyear){
-        surveyArea[j,t] <- TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
-        surveyFraction[j,t] <- surveyArea[j,t]/25
-      }
-    }
 
     #Observation model:
     for(j in 1:nsite){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- exp.Density.jt[j,t] * surveyFraction[j,t]
-        exp.Density.jt[j,t] ~ dpois(Density.jt[j,t]) 
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * 106[j,t]/1000 * 2
       }
     }
-    
     
     #State model
     for(j in 1:nsite){
@@ -141,7 +59,8 @@
       
       #linear predictor on density
         log(Density.jt[j,t]) <- int.d + 
-                            random.d.line[j] + 
+                            random.d.line[j] +
+                            random.d.adm [j] +
                             random.d.year[t] +
                             random.d.obs[j,t] +
                             inprod(beta[],occDM[j,]) 
@@ -150,13 +69,14 @@
     
     #for mean Density at observed sites
     for(j in 1:nsite){
-      log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) 
+      log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) + random.adm[adm[j]] 
     }
     
   
-    #mean density across all years
+    #mean density at grids across Norway
     for(j in 1:npreds){
-      log(Density[j]) <- int.d + inprod(beta[],predDM[j,])
+      log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) + random.adm[adm[j]] 
+      Density[j] <- Density.km[j]*25 # since there are 25 km per grid
     }
 
     totalPop <- sum(Density)
