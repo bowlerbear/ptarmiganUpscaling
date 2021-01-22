@@ -31,6 +31,43 @@ getEnvironData<-function(myraster,mygridTemp){
   return(myrasterDF)
 }
 
+getBufferData<-function(myraster,mybuffer){
+  require(maptools)
+  require(plyr)
+  
+  #crop raster to Norway extent and project all to raster crs
+  rasterCRS <- crs(myraster)
+  NorwayB <- spTransform(Norway,rasterCRS)
+  myraster <- crop(myraster,extent(NorwayB))
+  mybuffer <- spTransform(mybuffer,rasterCRS)
+  
+  #get mean myraster values per buffer
+  rasterDF <- raster::extract(myraster,mybuffer,fun=mean,na.rm=T,df=T)
+  rasterDF$LinjeID <- mybuffer@data$LinjeID
+  return(rasterDF[,c(3,2)])
+  
+}
+
+mergeCounties <- function(x,further=FALSE){
+  x <- as.character(x)
+  x[x %in% c("Ãstfold","Akershus","Buskerud","Oslo")] <- "Viken"
+  x[x %in% c("Hedmark","Oppland")] <- "Innlandet"
+  x[x %in% c("Hordaland","Sogn og Fjordane")] <- "Vestland"
+  x[x %in% c("Telemark","Vestfold")] <- "Vestfold og Telemark"
+  x[x %in% c("Nord-Trøndelag","Sør-Trøndelag")] <- "Trøndelag"
+  x[x %in% c("Vest-Agder","Aust-Agder")] <- "Adger"
+  x[x %in% c("Finnmark","Troms")] <- "Troms og Finnmark"
+  
+  if(further==TRUE){
+    x[x %in% c("Adger","Rogaland","Møre og Romsdal","Vestland")] <- "Adger/Rogaland/Vestfold/Telemark/Vestland/Viken"  
+    x[x %in% c("Vestfold og Telemark","Viken")] <- "Adger/Rogaland/Vestfold/Telemark/Vestland/Viken"
+    
+  }
+  
+  return(x)
+  
+}
+
 plotBUGSData<-function(myvar){
   temp<-listlengthDF
   temp<-subset(temp,siteIndex %in% bugs.data$site)
