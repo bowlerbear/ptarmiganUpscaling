@@ -50,6 +50,7 @@ mydata <- spatialLines[,c("LinjeID","Fylkesnavn","Region","Rapporteringsniva","O
 rownames(mydata) <- paste(mydata$LinjeID)
 Lines_spatial <- SpatialLinesDataFrame(spTemp, mydata, match.ID=T)
 #plot(Lines_spatial)
+saveRDS(Lines_spatial,file="data/Lines_spatial.rds")
 
 ### create buffers ##############################################################
 
@@ -82,6 +83,7 @@ Polys_spatial <- SpatialPolygonsDataFrame(Sr=allPolys,
                                           match.ID=FALSE)
 
 proj4string(Polys_spatial) <- equalM
+saveRDS(Polys_spatial,file="data/Polys_spatial.rds")
 
 ### plot ####################################################
 
