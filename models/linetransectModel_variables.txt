@@ -49,7 +49,7 @@
     for(j in 1:nsite){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * 106[j,t]/1000 * 2
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * 106/1000 * 2
       }
     }
     
@@ -60,7 +60,7 @@
       #linear predictor on density
         log(Density.jt[j,t]) <- int.d + 
                             random.d.line[j] +
-                            random.d.adm [j] +
+                            #random.d.adm [j] +
                             random.d.year[t] +
                             random.d.obs[j,t] +
                             inprod(beta[],occDM[j,]) 
@@ -69,13 +69,13 @@
     
     #for mean Density at observed sites
     for(j in 1:nsite){
-      log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) + random.adm[adm[j]] 
+      log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) 
     }
     
   
     #mean density at grids across Norway
     for(j in 1:npreds){
-      log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) + random.adm[adm[j]] 
+      log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) 
       Density[j] <- Density.km[j]*25 # since there are 25 km per grid
     }
 
