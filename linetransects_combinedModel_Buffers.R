@@ -39,7 +39,7 @@ allData$Fylkesnavn[which(allData$Rapporteringsniva=="Indre Troms")] <- "Troms"
 #mistake with 1405 - transect length
 allData$LengdeTaksert[which(allData$LinjeID==1405&allData$LengdeTaksert==1100)] <- 11000
 
-### aggregate data to the grid ######################################
+### aggregate data to the lines ######################################
 
 #Get statistics per year and line
 tlDF <- allData %>%
