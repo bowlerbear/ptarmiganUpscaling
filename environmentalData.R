@@ -456,3 +456,16 @@ table(varDF$adm)
 
 #save(varDF,file="data/varDF_allEnvironData_5km_idiv.RData")
 saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
+
+### group admins ####################################################################
+
+source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R', encoding = 'UTF-8')
+
+varDF$adm <- iconv(varDF$adm,"UTF-8","latin1")
+varDF$adm <- mergeCounties(varDF$adm,further=TRUE)
+table(varDF$adm)
+sum(is.na(varDF$adm))
+
+saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
+
+### end #############################################################################
