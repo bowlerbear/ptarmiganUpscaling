@@ -454,7 +454,6 @@ table(varDF$adm)
 
 ### save #############################################################################
 
-#save(varDF,file="data/varDF_allEnvironData_5km_idiv.RData")
 saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
 ### group admins ####################################################################
