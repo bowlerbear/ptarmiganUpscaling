@@ -38,6 +38,9 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 #read in list length object (made on the Rstudio server)
 listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
 
+#subset to May to September
+listlengthDF <- subset(listlengthDF,is.na(month)|(month > 4 & month <10))
+
 ### subset ##########################################################
 
 #subset to focal grids and those with environ covariate data
