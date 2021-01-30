@@ -132,16 +132,16 @@ mygrid[] <- 0
 mygrid[outHP$grid] <- outHP$HumanPop
 plot(mygrid)#looks good!
 
-### habitats ################################################################
+# ## habitats ################################################################
 
 setwd("C:/Users/db40fysa/Dropbox/Alpine/Habitat/Satveg_deling_nd_partnere_09_12_2009/Satveg_deling_nd_partnere_09_12_2009/tiff")
 library(raster)
 
 #project other rasters onto this
 habitatRasterTop <- raster("NNred25-30-t1.tif")#30 x 30 m
-habitatRasterTop <- aggregate(habitatRasterTop,fact=10,fun=modal,na.rm=T)
+habitatRasterTop <- aggregate(habitatRasterTop,fact=5,fun=modal,na.rm=T)
 habitatRasterBot <- raster("sn25_geocorr.tif")
-habitatRasterBot <- aggregate(habitatRasterBot,fact=10,fun=modal,na.rm=T)
+habitatRasterBot <- aggregate(habitatRasterBot,fact=5,fun=modal,na.rm=T)
 extent(habitatRasterTop)
 extent(habitatRasterBot)
 
@@ -155,6 +155,7 @@ plot(habitatRaster)
 #yeah!!!
 
 #Set NAs for irrelevant habitats
+habitatRaster[habitatRaster==22] <- NA
 habitatRaster[habitatRaster>24] <- NA
 habitatRaster[habitatRaster==0] <- NA
 plot(habitatRaster)
@@ -188,42 +189,51 @@ library(reshape2)
 myrasterDF <- melt(table(myrasterDF$grid,myrasterDF$myraster))
 names(myrasterDF)<-c("grid","raster","count")
 
-#get rid of 0s
-myrasterDF <- subset(myrasterDF,raster!=0)
+#add on total count per grid
+library(plyr)
+gridTotals <- ddply(myrasterDF,.(grid),summarise,total=sum(count))
+myrasterDF$total <- gridTotals$total[match(myrasterDF$grid,gridTotals$grid)]
 
 #simplify habitat counts
+
+#predict positive effect
+myrasterDF$MountainBirchForest<-0
+myrasterDF$MountainBirchForest[myrasterDF$raster%in%c(6,7,8)]<-myrasterDF$count[myrasterDF$raster%in%c(6,7,8)]
+
+#predict positive effect
+myrasterDF$Bog<-0
+myrasterDF$Bog[myrasterDF$raster%in%c(9,10)]<-myrasterDF$count[myrasterDF$raster%in%c(9,10)]
+
+#predict negative effect
 myrasterDF$Forest<-0
-myrasterDF$Forest[myrasterDF$raster%in%c(1:8)]<-myrasterDF$count[myrasterDF$raster%in%c(1:8)]
-myrasterDF$Open<-0
-myrasterDF$Open[myrasterDF$raster%in%c(9,10,12:21)]<-myrasterDF$count[myrasterDF$raster%in%c(9,10,12:21)]
-myrasterDF$Top<-0
-myrasterDF$Top[myrasterDF$raster%in%c(14,17)]<-myrasterDF$count[myrasterDF$raster%in%c(14,17)]
-#Heather-rich alpine ridge vegetation, Fresh heather and dwarf-shrub communities
-myrasterDF$PrefOpen[myrasterDF$raster%in%c(10,17,18)]<-myrasterDF$count[myrasterDF$raster%in%c(10,17,18)]
-myrasterDF$PrefClosed[myrasterDF$raster%in%c(6,7)]<-myrasterDF$count[myrasterDF$raster%in%c(6,7)]
-myrasterDF$Bottom<-0
-myrasterDF$Bottom[myrasterDF$raster%in%c(23:24)]<-myrasterDF$count[myrasterDF$raster%in%c(23:24)]
-#Agricultural areas, Cities and built-up areas
-myrasterDF$Agriculture[myrasterDF$raster%in%c(23)]<-myrasterDF$count[myrasterDF$raster%in%c(23)]
-#Agricultural areas
+myrasterDF$Forest[myrasterDF$raster%in%c(1:5)]<-myrasterDF$count[myrasterDF$raster%in%c(1:5)]
+
+#predict positive effect 
+myrasterDF$ODF<-0
+myrasterDF$ODF[myrasterDF$raster%in%c(16,17)]<-myrasterDF$count[myrasterDF$raster%in%c(16,17)]
+
+#predict positive effect 
+myrasterDF$Meadows<-0
+myrasterDF$Meadows[myrasterDF$raster%in%c(18)]<-myrasterDF$count[myrasterDF$raster%in%c(18)]
+
+#predict negative effect
+myrasterDF$OSF<-0
+myrasterDF$OSF[myrasterDF$raster%in%c(12,13,14,15)]<-myrasterDF$count[myrasterDF$raster%in%c(12,13,14,15)]
+
+#expect negative effect
+myrasterDF$SnowBeds<-0
+myrasterDF$SnowBeds[myrasterDF$raster%in%c(19,20)]<-myrasterDF$count[myrasterDF$raster%in%c(19,20)]
 
 #aggregate
 myrasterDF<-ddply(myrasterDF,.(grid),summarise,
-                  Forest=mean(Forest,na.rm=T),
-                  Open=mean(Open,na.rm=T),
-                  Bottom=mean(Bottom,na.rm=T),
-                  Top=mean(Top,na.rm=T),
-                  PrefOpen=mean(PrefOpen,na.rm=T),
-                  PrefClosed=mean(PrefClosed,na.rm=T),
-                  Agriculture=mean(Agriculture,na.rm=T))
+                  MountainBirchForest = sum(MountainBirchForest),
+                  Bog = sum(Bog)/unique(total),
+                  Forest = sum(Forest)/unique(total),
+                  ODF = sum(ODF)/unique(total),
+                  Meadows = sum(Meadows)/unique(total),
+                  OSF = sum(OSF)/unique(total),
+                  SnowBeds = sum(SnowBeds)/unique(total))
 
-
-#Simplify into factors
-myrasterDF$Habitat<-apply(myrasterDF,1,
-                          function(x)
-                            ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
-                                                         "Forest","Open"))
-myrasterDF$Habitat[myrasterDF$Top>150]<-"Top"
 
 saveRDS(myrasterDF,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Habitats.rds")
 
@@ -293,7 +303,6 @@ saveRDS(varDF,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/varDF_mis
 #Examine correlations among bugs variables
 library(GGally)
 ggpairs(varDF[,2:11])
-table(varDF$habitat)
 
 #bio1 and bio6 strongly related (0.808)
 #top and open are strongly related (0.726)
@@ -318,7 +327,7 @@ table(varDF$habitat)
 
 #subset to focal grids
 varDF <- subset(varDF,grid %in% focusGrids)
-# missing habitat data for 61 grids
+# missing habitat data for 57 grids
 apply(varDF,2,function(x)sum(is.na(x)))
 
 #check plots
@@ -327,7 +336,7 @@ mygrid[varDF$grid] <- varDF$bio1
 plot(mygrid)
 #looks good
 mygrid[] <- NA
-mygrid[varDF$grid] <- varDF$PrefOpen
+mygrid[varDF$grid] <- varDF$Forest
 plot(mygrid)
 #ok
 mygrid[] <- NA
@@ -335,7 +344,7 @@ mygrid[varDF$grid]<-varDF$bio6
 plot(mygrid)
 #good!
 
-#where are these 61 grids with missing habitat data
+#where are these 57 grids with missing habitat data
 mygrid[]<-0
 mygrid[varDF$grid[is.na(varDF$Forest)]]<-1
 plot(mygrid)
@@ -406,15 +415,19 @@ apply(alpineData,2,function(x)sum(is.na(x)))
 #are these in addition of different to the missing data in varDF
 missingVarDF <- varDF$grid[is.na(varDF$Forest)]
 missingAlpine <- alpineData$grid[is.na(alpineData$tree_line)]
-length(unique(missingVarDF,missingAlpine))#61 in total!!
+length(unique(missingVarDF,missingAlpine))#57 in total!!
 
 #merge all
 varDF <- merge(varDF,alpineData,by="grid",all=T)
 varDF <- subset(varDF,!is.na(Forest))
+varDF <- subset(varDF,!is.na(tree_line))
 
 ### check missing data again #########################################################
 
 apply(varDF,2,function(x)sum(is.na(x)))
+
+varDF$adm <- iconv(varDF$adm,"UTF-8","latin1")
+varDF$adm2 <- iconv(varDF$adm2,"UTF-8","latin1")
 
 #5 grids are outside - can we figure out there admin???
 table(varDF$adm)
@@ -450,6 +463,21 @@ subset(varDF,grid %in% c(74671,74672,74673,74674,74675))
 varDF$adm[varDF$grid==74673] <- "Rogaland"
 varDF$adm2[varDF$grid==74673] <- "Klepp"
 
+#also:
+#11587, 12063, 25485
+subset(varDF,grid %in% c(11585,11586,11588,11589))
+varDF$adm[varDF$grid==11587] <- "Finnmark"
+varDF$adm2[varDF$grid==11587] <- "Sør-Varanger"
+
+subset(varDF,grid %in% c(12061,12062,12064,12065))
+varDF$adm[varDF$grid==12063] <- "Finnmark"
+varDF$adm2[varDF$grid==12063] <- "Sør-Varanger"
+
+subset(varDF,grid %in% c(25483,25484,25486,25487))
+varDF$adm[varDF$grid==25485] <- "Nordland"
+varDF$adm2[varDF$grid==25485] <- "Tysfjord"
+
+
 table(varDF$adm)
 
 ### save #############################################################################
@@ -460,10 +488,10 @@ saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
 source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R', encoding = 'UTF-8')
 
-varDF$adm <- iconv(varDF$adm,"UTF-8","latin1")
-varDF$adm <- mergeCounties(varDF$adm,further=TRUE)
+varDF$admGrouped <- mergeCounties(varDF$adm,further=TRUE)
 table(varDF$adm)
-sum(is.na(varDF$adm))
+table(varDF$admGrouped)
+sum(is.na(varDF$admGrouped))
 
 saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
