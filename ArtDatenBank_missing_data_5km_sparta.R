@@ -83,35 +83,48 @@ summary(glm(species~tree_line_position + I(tree_line_position^2),data=tempDF,fam
 qplot(elevation,tree_line_position,data=tempDF)
 
 #habitat
-summary(glm(species~Open,data=tempDF,family="binomial"))#large
-summary(glm(species~PrefOpen,data=tempDF,family="binomial"))#large
-summary(glm(species~PrefClosed,data=tempDF,family="binomial"))#smaller
+summary(glm(species~MountainBirchForest,data=tempDF,family="binomial"))#small positive
+summary(glm(species~Bog,data=tempDF,family="binomial"))#large positive
+summary(glm(species~Forest,data=tempDF,family="binomial"))#negative large
+summary(glm(species~ODF,data=tempDF,family="binomial"))#large positive
+summary(glm(species~Meadows,data=tempDF,family="binomial"))#large positive
+summary(glm(species~OSF,data=tempDF,family="binomial"))#large positive
+summary(glm(species~SnowBeds,data=tempDF,family="binomial"))#no effect
+summary(glm(species~Mire,data=tempDF,family="binomial"))#small positives
+summary(glm(species~Human,data=tempDF,family="binomial"))#large negative
 
 #all together
-summary(glm(species~bio1 + Open + tree_line_position + I(tree_line_position^2),
+summary(glm(species~bio1 + MountainBirchForest+ Bog + Forest + ODF + Meadows + OSF + Mire + Human +
+              SnowBeds + tree_line_position + I(tree_line_position^2),
             data=tempDF,family="binomial"))
-#all significant...
-glm1<-glm(species ~ scale(bio1) + Open + scale(tree_line_position) + 
-            scale(I(tree_line_position^2)),family="binomial",data=tempDF)
-summary(glm1)
+#meadows, bog and mountainbirch forest and ODF
+
 
 #large range of variables to test
 library(MuMIn)
 options(na.action = "na.fail")
 
-glm1<-glm(species ~ scale(bio1) + scale(bio5) + scale(bio6) + 
-            Open + PrefOpen + PrefClosed +
-            scale(tree_line_position) + 
-            scale(I(tree_line_position^2))+
+glm1<-glm(species ~ scale(bio1) + #always included
+            scale(bio5) + 
+            scale(bio6) + 
+            scale(MountainBirchForest) + 
+            scale(Bog) + #always included
+            scale(Forest) + 
+            scale(Mire) +
+            scale(Human) +
+            scale(ODF) + #always included
+            scale(Meadows) + #always included
+            scale(OSF) + 
+            scale(SnowBeds) +
+            scale(tree_line_position) + #always included
+            scale(I(tree_line_position^2))+ #always included
             scale(elevation)+
             scale(elevation^2),
           family="binomial",data=tempDF)
 summary(glm1)
 
 dd <- dredge(glm1)
-subset(dd, delta < 4)
-
-summary(glm1)
+subset(dd, delta < 2)
 
 ### plot predictions #############################################
 
@@ -168,31 +181,27 @@ ggplot(tempDF)+
 #Boosted regression tree
 library(dismo)
 library(gbm)
-tempDF$Habitat <- as.factor(tempDF$Habitat)
-brt1 <- gbm.step(data=tempDF, gbm.x = c(2:12,15:21), gbm.y = 22,family = "bernoulli")
+brt1 <- gbm.step(data=tempDF, gbm.x = c(2:14,20:22), gbm.y = 28, family = "bernoulli")
 
 summary(brt1)
-# var    rel.inf
-# tree_line_position tree_line_position 36.4645966
-# PrefOpen                     PrefOpen 26.8581094
-# bio1                             bio1  7.9024681
-# tree_line                   tree_line  6.9429606
-# bio6                             bio6  4.4916500
-# Top                               Top  3.5940565
-# elevation                   elevation  2.7103596
-# alpine_habitat3       alpine_habitat3  2.3384410
-# Forest                         Forest  2.1606385
-# bio5                             bio5  1.4952306
-# Open                             Open  1.3596172
-# alpine_habitat1       alpine_habitat1  1.3146381
-# PrefClosed                 PrefClosed  1.0807878
-# alpine_habitat4       alpine_habitat4  0.4649590
-# Agriculture               Agriculture  0.4443746
-# Bottom                         Bottom  0.2314729
-# alpine_habitat2       alpine_habitat2  0.1456396
-# Habitat                       Habitat  0.0000000
-                              
-
+#                                   var    rel.inf
+# tree_line_position   tree_line_position 33.8778494# threshold negative effect
+# Bog                                 Bog 23.1696085# strong positive
+# ODF                                 ODF 15.1002901# positive
+# tree_line                     tree_line  5.7477793# negative
+# bio1                               bio1  4.9791068# negative
+# Meadows                         Meadows  3.3392798# positive effect
+# bio6                               bio6  3.1549125# lumped
+# MountainBirchForest MountainBirchForest  2.8030440# positive effect
+# OSF                                 OSF  1.9892002
+# SnowBeds                       SnowBeds  1.2531210
+# elevation                     elevation  1.2444317
+# bio5                               bio5  1.0440714
+# Mire                               Mire  0.9143484
+# Forest                           Forest  0.6839801
+# Human                             Human  0.4662962
+# Open                               Open  0.232680
+                             
 #plot main effects
 gbm.plot(brt1, n.plots=12, write.title = TRUE)
 gbm.plot.fits(brt1)
