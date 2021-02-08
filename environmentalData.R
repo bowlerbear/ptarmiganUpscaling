@@ -179,7 +179,7 @@ projection(mygrid) <- CRS(equalM)
 
 #get myraster values per grid cell
 mygrid[] <- 1:ncell(mygrid)
-variable <- extract(mygrid,myrasterDF)
+variable <- raster::extract(mygrid,myrasterDF)
 mygrid[] <- 0
 mygrid[variable] <- 1
 myrasterDF <- data.frame(myrasterDF@data)
@@ -220,19 +220,36 @@ myrasterDF$Meadows[myrasterDF$raster%in%c(18)]<-myrasterDF$count[myrasterDF$rast
 myrasterDF$OSF<-0
 myrasterDF$OSF[myrasterDF$raster%in%c(12,13,14,15)]<-myrasterDF$count[myrasterDF$raster%in%c(12,13,14,15)]
 
+#?
+myrasterDF$Mire<-0
+myrasterDF$Mire[myrasterDF$raster%in%c(11)]<-myrasterDF$count[myrasterDF$raster%in%c(11)]
+
 #expect negative effect
 myrasterDF$SnowBeds<-0
 myrasterDF$SnowBeds[myrasterDF$raster%in%c(19,20)]<-myrasterDF$count[myrasterDF$raster%in%c(19,20)]
 
+#open habitat
+myrasterDF$Open<-0
+myrasterDF$Open[myrasterDF$raster%in%c(11:20)]<-myrasterDF$count[myrasterDF$raster%in%c(11:20)]
+
+#human habitat - agriculture and urban
+myrasterDF$Human<-0
+myrasterDF$Human[myrasterDF$raster%in%c(23,24)]<-myrasterDF$count[myrasterDF$raster%in%c(23,24)]
+
+
 #aggregate
 myrasterDF<-ddply(myrasterDF,.(grid),summarise,
-                  MountainBirchForest = sum(MountainBirchForest),
+                  MountainBirchForest = sum(MountainBirchForest)/unique(total),
                   Bog = sum(Bog)/unique(total),
+                  Mire = sum(Mire)/unique(total),
+                  Open = sum(Open)/unique(total),
+                  Human = sum(Human)/unique(total),
                   Forest = sum(Forest)/unique(total),
                   ODF = sum(ODF)/unique(total),
                   Meadows = sum(Meadows)/unique(total),
                   OSF = sum(OSF)/unique(total),
-                  SnowBeds = sum(SnowBeds)/unique(total))
+                  SnowBeds = sum(SnowBeds)/unique(total),
+                  total = unique(total))
 
 
 saveRDS(myrasterDF,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Habitats.rds")
@@ -294,6 +311,8 @@ saveRDS(out_Bio,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Climate
 #combine others
 varDF <- merge(out_Bio,myrasterDF,by="grid",all=T)
 varDF <- merge(varDF,myAdm,by="grid",all=T)
+varDF <- merge(varDF,outHP,all=T)
+varDF <- merge(varDF,outAccess,all=T)
 varDF <- subset(varDF,!is.na(grid))
 
 saveRDS(varDF,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/varDF_missing_5km_idiv.rds")
@@ -354,7 +373,7 @@ plot(Norway,add=T)
 ### alpine data #############################################################################
 
 #also get alpine data
-
+setwd("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling")
 load("data/alpineData_5kmGrid.RData")
 
 alpineData <- subset(alpineData,site %in% focusGrids)
