@@ -8,7 +8,7 @@ library(plyr)
 #HPC
 myfolder <- "/data/idiv_ess/ptarmiganUpscaling" 
 #local
-myfolder <- "data"
+#myfolder <- "data"
 
 ### get norway##############################################################
 
@@ -76,7 +76,8 @@ folds <- readRDS(paste(myfolder,"folds_occModel.rds",sep="/"))
 listlengthDF$fold <- folds$fold[match(listlengthDF$grid,folds$grid)]
 
 #select fold of this task
-fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
+#fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
+fold.id = 1
 
 #split intp test and train
 listlengthDF_test <- subset(listlengthDF,fold == fold.id)
@@ -153,13 +154,9 @@ siteInfo$bio1 <- scale(siteInfo$bio1)
 siteInfo$bio5 <- scale(siteInfo$bio5)
 siteInfo$bio6 <- scale(siteInfo$bio6)
 siteInfo$elevation <- scale(siteInfo$elevation)
-siteInfo$PrefOpen <- scale(siteInfo$PrefOpen)
-siteInfo$Open <- scale(siteInfo$Open)
-siteInfo$Top <- scale(siteInfo$Top)
 
-siteInfo_test <- subset(listlengthDF_test,!duplicated(grid))
-siteInfo_train <- subset(listlengthDF_train,!duplicated(grid))
-
+siteInfo_test <- subset(siteInfo,grid %in% siteInfo_test$grid)
+siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
 
 ### fit model ########################################################
 
@@ -168,27 +165,22 @@ bugs.data$occDM_train <- model.matrix(~ siteInfo_train$tree_line_position +
                                   siteInfo_train$tree_line_position^2 +
                                   siteInfo_train$bio1 + 
                                   siteInfo_train$bio5 + 
-                                  siteInfo_train$bio6 +
-                                  siteInfo_train$elevation +
-                                  siteInfo_train$Open + 
-                                  siteInfo_train$Top)[,-1]
+                                  siteInfo_train$bio6)[,-1]
 
 bugs.data$occDM_test <- model.matrix(~ siteInfo_test$tree_line_position + 
                                         siteInfo_test$tree_line_position^2 +
                                         siteInfo_test$bio1 + 
                                         siteInfo_test$bio5 + 
-                                        siteInfo_test$bio6 +
-                                        siteInfo_test$elevation +
-                                        siteInfo_test$Open + 
-                                        siteInfo_test$Top)[,-1]
+                                        siteInfo_test$bio6)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM_test)
 
-params <- c("mean.p","beta","beta.effort","beta.det.open","pred.muZ")
+params <- c("mean.p","beta","beta.effort","beta.det.open","ZFinal","psiFinal")
 
 modelfile <- paste(myfolder,"BUGS_occuModel_upscaling_CV.txt",sep="/")
 
-n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
+#n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
+n.cores = 3
 
 n.iterations = 20000
 
@@ -202,4 +194,8 @@ out1 <- jags(bugs.data,
              n.iter = n.iterations,
              parallel = T)
 
-saveRDS(out1$summary,file="outSummary_occModel_upscaling_CV.rds")
+### AUC check ############################################################
+
+
+
+### end ##################################################################
