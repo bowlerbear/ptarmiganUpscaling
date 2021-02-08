@@ -245,3 +245,15 @@ ROC1 <- data.frame(fpr = fprm$value,
                    iter = rep(fprm$iter, 2))
 
 #actually compares z and psi...
+
+#https://rdrr.io/github/jdyen/occupancy/man/validate.html
+library(occupancy)
+
+occupancy#object just Jags objects
+calculate_metrics
+r2_calc
+validate
+https://rdrr.io/github/jdyen/occupancy/src/R/validate.R
+#fitted is p_obs???
+
+
