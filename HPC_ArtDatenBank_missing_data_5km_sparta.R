@@ -131,24 +131,24 @@ inits <- function(){list(z = zst)}
 #specify model structure
 bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
                                   scale(siteInfo$tree_line_position^2) +
-                                  scale(siteInfo$bio1) + 
-                                  scale(siteInfo$bio5) +
-                                  scale(siteInfo$elevation) +
-                                  scale(siteInfo$elevation^2) +
-                                  scale(siteInfo$Top) + 
-                                  scale(siteInfo$Open))[,-1]
+                                  scale(siteInfo$bio1) +
+                                  scale(siteInfo$bio1^2) +
+                                  scale(siteInfo$Bog) +
+                                  scale(siteInfo$ODF) +
+                                  scale(siteInfo$Meadows) +
+                                  scale(siteInfo$MountainBirchForest))[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 #saveRDS(bugs.data,file="data/bugs.data_ArtsDaten.rds")
 
-params <- c("mean.p","beta","beta.effort","beta.det.open",
+params <- c("mean.p","beta","beta.effort",
             "grid.z","grid.psi")
 
 modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
 
 n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 
-n.iterations = 20000
+n.iterations = 10000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -156,8 +156,15 @@ out1 <- jags(bugs.data,
              modelfile, 
              n.thin = 10, 
              n.chains = n.cores, 
-             n.burnin = round(n.iterations/3),
+             n.burnin = round(n.iterations/2),
              n.iter = n.iterations,
              parallel = T)
 
 saveRDS(out1$summary,file="outSummary_occModel_upscaling.rds")
+
+#update by a small number and get full model
+out2 <- update(out1,
+               parameters.to.save = c("mid.z","mid.psi"),
+               n.iter = 1000)
+
+saveRDS(out2,file="out_update_occModel_upscaling.rds")
