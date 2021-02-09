@@ -110,6 +110,10 @@ names(bugs.data)
 #check everything aligns
 all(bufferData$LinjeID==siteInfo$LinjeID)
 
+#siteInfo <- cbind(siteInfo[,c("siteIndex","admN")],bufferData)
+#saveRDS(siteInfo,
+#        file = "data/siteInfo_linetransects.rds")
+
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ bufferData$tree_line +
                                   bufferData$bio1 +
