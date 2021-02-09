@@ -6,8 +6,27 @@ library(raster)
 library(maptools)
 
 myfolder <- "Data"
+equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
 
 source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R')
+
+### get norway ##############################################
+
+data(wrld_simpl)
+Norway <- subset(wrld_simpl,NAME=="Norway")
+NorwayOrig <- Norway
+Norway <- gBuffer(Norway,width=1)
+Norway <- spTransform(Norway,crs(equalM))
+plot(Norway)
+
+#create grid
+newres = 5000#5 km grid
+mygrid <- raster(extent(projectExtent(Norway,equalM)))
+res(mygrid) <- newres 
+mygrid[] <- 1:ncell(mygrid)
+plot(mygrid)
+gridTemp <- mygrid
+plot(Norway,add=T)
 
 ### ptarmigan data ###############################################################
 
@@ -55,7 +74,6 @@ saveRDS(Lines_spatial,file="data/Lines_spatial.rds")
 ### create buffers ##############################################################
 
 #convert to utm 
-equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
 spTemp <- spTransform(Lines_spatial,crs(equalM))
 
 #get centroids
@@ -104,19 +122,27 @@ for(i in 1:length(myLines)){
 
 }
 
+### get main grid of each polygon ##########################
+
+centreDF <- data.frame(LinjeID = spTemp$LinjeID,
+                       x = lineCentres[,1],
+                       y = lineCentres[,2])
+
+coordinates(centreDF) <- c("x","y")
+proj4string(centreDF) <- CRS(equalM)
+
+plot(mygrid)
+plot(Norway,add=T)
+plot(centreDF,add=T)
+
+centreDF$grid <- extract(mygrid,centreDF)
+centreDF@data$x <- centreDF@coords[,1]
+centreDF@data$y <- centreDF@coords[,2]
+saveRDS(centreDF@data,"data/lines_to_grids.rds")
+
 ### get environ data for all circles ########################
 
-### get norway ##############################################
-
-library(raster)
-library(maptools)
-library(rgeos)
-data(wrld_simpl)
-Norway <- subset(wrld_simpl,NAME=="Norway")
-NorwayOrig <- Norway
-Norway <- gBuffer(Norway,width=1)
-Norway <- spTransform(Norway,crs(equalM))
-plot(Norway)
+Polys_spatial <- readRDS("data/Polys_spatial.rds")
 
 ### admin ##################################################
 
@@ -127,10 +153,11 @@ library(plyr)
 #make both spatial objects in the same crs
 NorwayADM <- readOGR(dsn="C:/Users/db40fysa/Dropbox/Alpine/NOR_adm",layer="NOR_adm2")
 plot(NorwayADM)
-table(NorwayADM$NAME_1)
 NorwayADM$NAME_1 <- iconv(NorwayADM$NAME_1, "UTF-8","latin1")
+table(NorwayADM$NAME_1)
 NorwayADM <- spTransform(NorwayADM,crs(Polys_spatial))
-NorwayADM$NAME_1 <- mergeCounties(NorwayADM$NAME_1,further=TRUE)
+NorwayADM$NAME_1 <- mergeCounties(as.character(NorwayADM$NAME_1),further=TRUE)
+table(NorwayADM$NAME_1)
 
 #overlay with the Polygons
 myAdm <- over(Polys_spatial,NorwayADM)
@@ -148,9 +175,9 @@ library(raster)
 
 #project other rasters onto this
 habitatRasterTop <- raster("NNred25-30-t1.tif")#30 x 30 m
-habitatRasterTop <- aggregate(habitatRasterTop,fact=10,fun=modal,na.rm=T)
+habitatRasterTop <- aggregate(habitatRasterTop,fact=5,fun=modal,na.rm=T)
 habitatRasterBot <- raster("sn25_geocorr.tif")
-habitatRasterBot <- aggregate(habitatRasterBot,fact=10,fun=modal,na.rm=T)
+habitatRasterBot <- aggregate(habitatRasterBot,fact=5,fun=modal,na.rm=T)
 extent(habitatRasterTop)
 extent(habitatRasterBot)
 
@@ -164,6 +191,7 @@ plot(habitatRaster)
 #yeah!!!
 
 #Set NAs for irrelevant habitats
+habitatRaster[habitatRaster==22] <- NA
 habitatRaster[habitatRaster>24] <- NA
 habitatRaster[habitatRaster==0] <- NA
 plot(habitatRaster)
@@ -176,40 +204,34 @@ rasterCRS <- crs(myraster)
 #get raster values for each polygon
 myrasterDF <- raster::extract(myraster,Polys_spatial,weights=TRUE, 
                                normalizeWeights=FALSE, df=TRUE)
-myrasterDF <- subset(myrasterDF,!is.na(layer))
 
 #simplify habitat counts
-myrasterDF$Forest <- ifelse(myrasterDF$layer%in%c(1:8),1,0)
-myrasterDF$Open <- ifelse(myrasterDF$layer%in%c(9,10,12:21),1,0)
-myrasterDF$Top <- ifelse(myrasterDF$layer%in%c(14,17),1,0)
-#Heather-rich alpine ridge vegetation, Fresh heather and dwarf-shrub communities
-myrasterDF$PrefOpen <- ifelse(myrasterDF$layer%in%c(10,17,18),1,0)
-myrasterDF$PrefClosed <- ifelse(myrasterDF$layer%in%c(6,7),1,0)
-myrasterDF$Bottom <- ifelse(myrasterDF$layer%in%c(23:24),1,0)
-#Agricultural areas, Cities and built-up areas
-myrasterDF$Agriculture <- ifelse(myrasterDF$layer%in%c(23),1,0)
-#Agricultural areas
+myrasterDF$MountainBirchForest <- ifelse(myrasterDF$layer%in%c(6,7,8),1,0)
+myrasterDF$Bog <- ifelse(myrasterDF$layer%in%c(9,10),1,0)
+myrasterDF$Forest <- ifelse(myrasterDF$layer%in%c(1:5),1,0)
+myrasterDF$ODF <- ifelse(myrasterDF$layer%in%c(16,17),1,0)
+myrasterDF$Meadows <- ifelse(myrasterDF$layer%in%c(18),1,0)
+myrasterDF$OSF <- ifelse(myrasterDF$layer%in%c(12:15),1,0)
+myrasterDF$Mire <- ifelse(myrasterDF$layer%in%c(11),1,0)
+myrasterDF$SnowBeds <- ifelse(myrasterDF$layer%in%c(19,20),1,0)
+myrasterDF$Open <- ifelse(myrasterDF$layer%in%c(11:20),1,0)
+myrasterDF$Human <- ifelse(myrasterDF$layer%in%c(23,24),1,0)
 
 #aggregate
 myrasterDF<-ddply(myrasterDF,.(ID),summarise,
-                  Forest = sum(weight[Forest==1]),
-                  Open = sum(weight[Open==1]),
-                  Bottom = sum(weight[Bottom==1]),
-                  Top = sum(weight[Top==1]),
-                  PrefOpen = sum(weight[PrefOpen==1]),
-                  PrefClosed = sum(weight[PrefClosed==1]),
-                  Agriculture = sum(weight[Agriculture==1]))
-
+                  MountainBirchForest = sum(weight[MountainBirchForest==1])/sum(weight),
+                  Bog = sum(weight[Bog==1])/sum(weight),
+                  Forest = sum(weight[Forest=1])/sum(weight),
+                  ODF = sum(weight[ODF==1])/sum(weight),
+                  Meadows = sum(weight[Meadows==1])/sum(weight),
+                  OSF = sum(weight[OSF==1])/sum(weight),
+                  Mire = sum(weight[Mire==1])/sum(weight),
+                  SnowBeds = sum(weight[SnowBeds==1])/sum(weight),
+                  Open = sum(weight[Open==1])/sum(weight),
+                  Human = sum(weight[Human==1])/sum(weight))
 
 #add line ID
 myrasterDF$LinjeID <- Polys_spatial$LinjeID
-
-#Simplify into factors
-myrasterDF$Habitat<-apply(myrasterDF,1,
-                          function(x)
-                            ifelse(as.numeric(x["Forest"])>as.numeric(x["Open"]),
-                                   "Forest","Open"))
-myrasterDF$Habitat[myrasterDF$Top>150]<-"Top"
 
 ### climate ################################################################################
 
@@ -269,6 +291,8 @@ varDF <- merge(out_Bio,myrasterDF,by="LinjeID",all=T)
 varDF <- merge(varDF,myAdm,by="LinjeID",all=T)
 
 ### alpine data #############################################################################
+
+setwd("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling")
 
 #also get alpine data
 
