@@ -164,7 +164,7 @@ saveRDS(out1$summary,file="outSummary_occModel_upscaling.rds")
 
 #update by a small number and get full model
 out2 <- update(out1,
-               parameters.to.save = c("mid.z","mid.psi"),
+               parameters.to.save = c("mid.z","mid.psi","Py"),
                n.iter = 1000)
 
 saveRDS(out2,file="out_update_occModel_upscaling.rds")
