@@ -49,6 +49,7 @@ getBufferData<-function(myraster,mybuffer){
 }
 
 mergeCounties <- function(x,further=FALSE){
+  
   x <- as.character(x)
   x[x %in% c("Ãstfold","Akershus","Buskerud","Oslo")] <- "Viken"
   x[x %in% c("Hedmark","Oppland")] <- "Innlandet"
@@ -59,6 +60,7 @@ mergeCounties <- function(x,further=FALSE){
   x[x %in% c("Finnmark","Troms")] <- "Troms og Finnmark"
   
   if(further==TRUE){
+    
     x[x %in% c("Adger","Rogaland","Vestland")] <- "Adger/Rogaland/Vestfold/Telemark/Viken"  
     x[x %in% c("Vestfold og Telemark","Viken")] <- "Adger/Rogaland/Vestfold/Telemark/Viken"
     x[x %in% c("Møre og Romsdal","Vestland")] <- "Innlandet"
