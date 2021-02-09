@@ -69,15 +69,17 @@ listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
 #remove missing observations
 listlengthDF <- subset(listlengthDF,!is.na(y))
 siteInfo <- subset(listlengthDF,!duplicated(grid))
+siteInfo <- arrange(siteInfo,grid)
 
 ### folds #############################################################
 
 folds <- readRDS(paste(myfolder,"folds_occModel.rds",sep="/"))
 listlengthDF$fold <- folds$fold[match(listlengthDF$grid,folds$grid)]
+table(listlengthDF$fold)
 
 #select fold of this task
-#fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
-fold.id = 1
+fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
+#fold.id = 1
 
 #split intp test and train
 listlengthDF_test <- subset(listlengthDF,fold == fold.id)
@@ -129,12 +131,6 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
 
 #bugs.data_ArtsDaten <- bugs.data
 
-#alpine_habitat:
-#1= Open lowland, 
-#2 = Low alpine zone, 
-#3 = intermediate alpine zone, 
-#4 = high alpine zone 
-
 ### initials ####################################################################
 
 #get JAGS libraries
@@ -175,14 +171,14 @@ bugs.data$occDM_test <- model.matrix(~ siteInfo_test$tree_line_position +
 
 bugs.data$n.covs <- ncol(bugs.data$occDM_test)
 
-params <- c("mean.p","beta","beta.effort","beta.det.open","ZFinal","psiFinal")
+params <- c("mean.p","beta","beta.effort")
 
 modelfile <- paste(myfolder,"BUGS_occuModel_upscaling_CV.txt",sep="/")
 
-#n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
-n.cores = 3
+n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
+#n.cores = 3
 
-n.iterations = 20000
+n.iterations = 200
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -194,8 +190,126 @@ out1 <- jags(bugs.data,
              n.iter = n.iterations,
              parallel = T)
 
+summary(out1$Rhat$beta)
+
+#once converged update to get z, py and psi
+out2 <- update(out1,
+               parameters.to.save = c("mid.z_train","mid.psi_train","Py_train",
+                                      "mid.z_test","mid.psi_test","Py_test"),
+               n.iter = 10)
+
 ### AUC check ############################################################
 
+library(ggmcmc)
+ggd2 <- ggs(out2$samples)
 
+#Y against Py 
+
+#test 
+Py_preds <- subset(ggd2,grepl("Py_test",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(factor(paste(Py_preds$Iteration,Py_preds$Chain)))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_py_test <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  pred <- ROCR::prediction(py.vals, 
+                           bugs.data$y_test)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_py_test[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_py_test)
+
+#train
+Py_preds <- subset(ggd2,grepl("Py_train",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(factor(paste(Py_preds$Iteration,Py_preds$Chain)))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_py_train <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  pred <- ROCR::prediction(py.vals, 
+                     bugs.data$y_train)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_py_train[i] <- perf@y.values[[1]]
+
+}
+
+summary(AUC_py_train)
+
+
+#Z against psi
+
+#test
+Preds <- subset(ggd2,grepl("mid.psi_test",ggd2$Parameter))
+Z_Preds <- subset(ggd2,grepl("mid.z_test",ggd2$Parameter))
+Preds$Iteration <- as.numeric(factor(paste(Preds$Iteration,Preds$Chain)))
+nu_Iteractions <- max(Preds$Iteration)
+head(Preds)
+
+#look through all iterations
+AUC_psi_test <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  psi.vals <- Preds$value[Preds$Iteration==i]
+  z.vals <- Z_Preds$value[Preds$Iteration==i]
+  
+  pred <- ROCR::prediction(psi.vals, z.vals)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_psi_test[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_psi_test)
+
+
+#train
+Preds <- subset(ggd2,grepl("mid.psi_train",ggd2$Parameter))
+Z_Preds <- subset(ggd2,grepl("mid.z_train",ggd2$Parameter))
+Preds$Iteration <- as.numeric(factor(paste(Preds$Iteration,Preds$Chain)))
+nu_Iteractions <- max(Preds$Iteration)
+head(Preds)
+
+#look through all iterations
+AUC_psi_train <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  psi.vals <- Preds$value[Preds$Iteration==i]
+  z.vals <- Z_Preds$value[Preds$Iteration==i]
+  
+  pred <- ROCR::prediction(psi.vals, z.vals)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_psi_train[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_psi_train)
+
+
+#combine all together and save
+all_AUCs <- data.frame(AUC_psi_test,AUC_psi_train,AUC_py_test,AUC_py_train)
+saveRDS(allAUCs,file=paste0("all_AUCs_fold.id_",fold.id,".rds"))
 
 ### end ##################################################################
