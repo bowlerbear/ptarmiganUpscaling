@@ -53,11 +53,37 @@ library(blockCV)
 library(raster)
 library(sf)
 library(plyr)
+
+#create grid
+equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
+
+library(raster)
+library(maptools)
+library(rgeos)
+data(wrld_simpl)
+Norway <- subset(wrld_simpl,NAME=="Norway")
+NorwayOrig <- Norway
+Norway <- gBuffer(Norway,width=1)
+Norway <- spTransform(Norway,crs(equalM))
+plot(Norway)
+
+#create grid
+newres = 5000#5 km grid
+mygrid <- raster(extent(projectExtent(Norway,equalM)))
+res(mygrid) <- newres 
+mygrid[] <- 1:ncell(mygrid)
+plot(mygrid)
+gridTemp <- mygrid
+plot(Norway,add=T)
+myGridDF <- as.data.frame(mygrid,xy=T)
+
+#### for occu model #########
+
 siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data
 #make each variable column a grid
-myVars <- names(siteInfo)[c(12:21,25:31)]
+myVars <- names(siteInfo)[c(12:24,30:36)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -71,7 +97,8 @@ projection(awt) <- equalM
 plot(awt)
 
 # import presence-absence species data
-speciesSummary <- ddply(siteInfo,.(grid,siteIndex),summarise,PA=max(y))
+speciesSummary <- ddply(siteInfo,.(grid,siteIndex),summarise,PA=max(y,na.rm=T))
+speciesSummary$PA[is.infinite(speciesSummary$PA)] <- 0
 siteInfo$species <- speciesSummary$PA[match(siteInfo$grid,speciesSummary$grid)]
 siteInfo <- merge(siteInfo,myGridDF,by.x="grid",by.y="layer")
 
@@ -142,7 +169,7 @@ rangeExplorer(rasterLayer = awt,
 mydata <- raster::extract(awt, pa_data,df=TRUE)
 nrow(mydata) #sites with NA species data are excluded
 nrow(siteInfo)
-folds <- eb$foldID
+folds <- sb$foldID
 length(folds)
 
 #plot the folds
@@ -151,18 +178,66 @@ qplot(x, y.y, data=siteInfo, colour=factor(folds))
 saveRDS(siteInfo[,c("grid","siteIndex","folds")],
         file="data/folds_occModel.rds")
 
-#same order as in the siteInfo filer, as long as data with only presence/absence
-#records are used
-siteInfo$fold <- 6
-siteInfo$fold[!is.na(siteInfo$species)] <- folds
-table(siteInfo$fold,siteInfo$adm)
+#### for distance model ####
 
-# this way only works with foldID
-# for k = 1 to 5
-k = 1
-trainData = mydata[which(folds != k), ]
-testData = mydata[which(folds == k), ]  
-  
+siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
+
+# import raster data for whole country
+myVars <- names(siteInfo)[c(12:24,30:36)]
+myRasters <- list()
+for(i in 1:length(myVars)){
+  temp <- mygrid
+  temp[] <- NA
+  temp[siteInfo$grid] <- siteInfo[,myVars[i]]
+  myRasters[i] <- temp
+}
+myRasters <- stack(myRasters)
+awt<- raster::brick(myRasters)
+projection(awt) <- equalM
+plot(awt)
+
+
+# get transect data
+siteInfo <- readRDS("data/siteInfo_linetransects.rds")
+mapping <- readRDS("data/lines_to_grids.rds")
+siteInfo <- merge(siteInfo,mapping,by="LinjeID")
+
+# import presence-absence species data
+pa_data <- siteInfo
+pa_data$species <- 1
+coordinates(pa_data) <- c("x","y")
+proj4string(pa_data) <- CRS(equalM)
+
+# plot species data on the map
+plot(awt[[1]]) # plot raster data
+plot(pa_data,add=TRUE)
+
+# spatial blocking
+sb <- spatialBlock(speciesData = pa_data,
+                   species = "species",
+                   rasterLayer = awt,
+                   theRange = 150000, # size of the blocks
+                   k = 5,
+                   selection = "random")
+
+sac <- spatialAutoRange(rasterLayer = awt,
+                        sampleNumber = 5000,
+                        doParallel = TRUE,
+                        showPlots = TRUE)
+
+### retrieve each fold in the data
+mydata <- raster::extract(awt, pa_data,df=TRUE)
+nrow(mydata) #sites with NA species data are excluded
+nrow(siteInfo)
+folds <- sb$foldID
+length(folds)
+
+#plot the folds
+siteInfo$folds <- sb$foldID
+qplot(x, y, data=siteInfo, colour=factor(folds))
+saveRDS(siteInfo[,c("grid","siteIndex","LinjeID","folds")],
+        file="data/folds_distanceModel.rds")
+
 ### AUC ##################################################
 
 #choice for binary data models is AUC, area under
@@ -212,6 +287,7 @@ plot(perf,colorize=TRUE)
 
 #make data frame into a matrix - site by iterations matrix
 #calculate auc for each iteration - need both z and psi for this bit
+library(ggmcmc)
 ggd2 <- ggs(out2)
 nstore <- niter / nthin
 psi.pred <- array(dim=c(nsite, nstore*nchain))
