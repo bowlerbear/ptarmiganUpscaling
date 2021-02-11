@@ -81,6 +81,65 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
+
+### AUC ######################################################
+
+out2 <- readRDS("model-outputs/out_update_occModel_upscaling.rds")
+
+library(ggmcmc)
+ggd2 <- ggs(out2$samples)
+
+#Z against psi
+Preds <- subset(ggd2,grepl("mid.psi",ggd2$Parameter))
+Z_Preds <- subset(ggd2,grepl("mid.z",ggd2$Parameter))
+Preds$Iteration <- as.numeric(factor(paste(Preds$Iteration,Preds$Chain)))
+nu_Iteractions <- max(Preds$Iteration)
+head(Preds)
+
+#look through all iterations
+AUC_psi <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  psi.vals <- Preds$value[Preds$Iteration==i]
+  z.vals <- Z_Preds$value[Preds$Iteration==i]
+  
+  pred <- ROCR::prediction(psi.vals, z.vals)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_psi[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_psi)
+
+#Y against Py 
+
+Py_preds <- subset(ggd2,grepl("Py",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(factor(paste(Py_pred$Iteration,Py_preds$Chain)))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_py <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  pred <- ROCR::prediction(py.vals, 
+                           bugs.data$y_test)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_py[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_py)
+
+
 ### distance models ##########################################
 
 siteInfo <- readRDS("data/siteInfo_LineTransects.rds")
