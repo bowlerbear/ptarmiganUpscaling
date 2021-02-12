@@ -310,6 +310,6 @@ summary(AUC_psi_train)
 
 #combine all together and save
 all_AUCs <- data.frame(AUC_psi_test,AUC_psi_train,AUC_py_test,AUC_py_train)
-saveRDS(allAUCs,file=paste0("all_AUCs_fold.id_",fold.id,".rds"))
+saveRDS(all_AUCs,file=paste0("all_AUCs_fold.id_",fold.id,".rds"))
 
 ### end ##################################################################
