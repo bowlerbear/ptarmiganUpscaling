@@ -110,17 +110,13 @@ names(bugs.data)
 #check everything aligns
 all(bufferData$LinjeID==siteInfo$LinjeID)
 
-#siteInfo <- cbind(siteInfo[,c("siteIndex","admN")],bufferData)
-#saveRDS(siteInfo,
-#        file = "data/siteInfo_linetransects.rds")
-
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ bufferData$tree_line +
                                   bufferData$bio1 +
                                   bufferData$bio5 +
                                   bufferData$elevation +
-                                  bufferData$Open +
-                                  bufferData$Top)[,-1]
+                                  bufferData$Bog +
+                                  bufferData$Forest)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
@@ -132,8 +128,8 @@ bugs.data$predDM <- model.matrix(~ environData$tree_line +
                                    environData$bio1 +
                                    environData$bio5 +
                                    environData$elevation + 
-                                   environData$Open +
-                                   environData$Top)[,-1]
+                                   environData$Bog +
+                                   environData$Forest)[,-1]
 
 bugs.data$npreds <- nrow(environData)
 
@@ -145,7 +141,7 @@ library(jagsUI)
 #params <- c("int.d","line.d.sd","year.d.sd",
 #            "beta","bpv","totalPop","Density","Dens_lt")
 
-params <- c("Dens_lt","Density")
+params <- c("Dens_lt","Density","meanExpNu","ExpNu_5")
 
 modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
 
@@ -161,7 +157,7 @@ out1 <- jags(bugs.data,
              n.iter=40000,
              parallel=T)
 
-saveRDS(out1$summary,file="outSummary_linetransectModel.rds")
+saveRDS(out1$summary,file="outSummary_linetransectModel_variables.rds")
 
 ### end #######################################################
 
