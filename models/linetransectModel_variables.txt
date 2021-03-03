@@ -70,6 +70,9 @@
     #for mean Density at observed sites
     for(j in 1:nsite){
       log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) 
+      meanExpNu[j] <- mean(expNuIndivs[j,])
+      ExpNu_5[j] <- expNuIndivs[j,5] 
+      
     }
     
   
