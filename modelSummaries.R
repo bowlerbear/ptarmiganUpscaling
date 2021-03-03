@@ -8,11 +8,6 @@ library(rgeos)
 siteInfo_Occ <- readRDS("data/siteInfo_ArtsDaten.rds")
 siteInfo_Abund <- readRDS("data/siteInfo_LineTransects.rds")
 
-#check all are the same
-all(siteInfo_Occ$grid==siteInfo_Abund$grid)
-all(siteInfo_Occ$siteIndex==siteInfo_Abund$siteIndex)
-#TRUE
-
 ### common grid ###########################################################
 
 #using a m grid
@@ -35,7 +30,7 @@ plot(mygrid)
 gridTemp <- mygrid
 myGridDF <- as.data.frame(mygrid,xy=T)
 
-### occu models ##############################################
+### OCCU models ##############################################
 
 siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
@@ -82,7 +77,7 @@ ggplot(betas)+
              linetype="dashed")
 
 
-### AUC ######################################################
+### auc ######################################################
 
 out2 <- readRDS("model-outputs/out_update_occModel_upscaling.rds")
 
@@ -140,7 +135,7 @@ for (i in 1:nu_Iteractions){
 summary(AUC_py)
 
 
-### distance models ##########################################
+### DISTANCE models ##########################################
 
 siteInfo <- readRDS("data/siteInfo_LineTransects.rds")
 environData <- readRDS("data/environData.rds")
@@ -210,7 +205,114 @@ ggplot(betas)+
              linetype="dashed")
 
 
-#### combined model #####################################
+
+### predictive fits #################
+
+#full data model
+
+out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+
+#mean across all years
+preds <- subset(out1,grepl("meanExpNu",out1$Param))
+dataMeans <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
+preds$data <- as.numeric(dataMeans)
+qplot(data,mean,data=preds)+
+  geom_abline(intercept=0,slope=1)
+#correlated but always underestimated
+
+#year 5 data
+preds <- subset(out1,grepl("ExpNu_5",out1$Param))
+dataMeans <- bugs.data$NuIndivs[,5]
+preds$data <- as.numeric(dataMeans)
+qplot(data,mean,data=preds)+
+  geom_abline(intercept=0,slope=1)
+#almost perfect...
+cor(preds$data,preds$mean)#99
+
+#CV fold models
+
+library(ggmcmc)
+
+#get all files for fold 1
+fold <- 3
+myFolds <- myFiles[grepl(paste0("_",fold,".rds"),myFiles)]
+
+#read in main model
+out1 <- readRDS(paste("model-outputs/linetransectModel_CV",myFolds[1],sep="/"))
+ggd <- ggs(out1$samples)
+#we have mid.expNuIndivs_test, 
+#mid.expNuIndivs_train
+
+#get training data
+out1_train <- subset(ggd,grepl("mid.expNuIndivs_train",ggd$Parameter))
+out1_train$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_train$Parameter))
+out1_train$index <- as.numeric(interaction(out1_train$Iteration,out1_train$Chain))
+
+#get actual NuIndiv
+train_fold <- myFolds[grepl("train",myFolds)]
+totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV",train_fold,sep="/"))
+totalsInfo_year5 <- totalsInfo[,5]
+
+#check they are consistent:
+length(unique(out1_train$siteIndex)) == dim(totalsInfo)[1]
+
+#plot correlation between mean values
+meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=median(value))
+meanVals$obs <- totalsInfo_year5
+qplot(obs,pred,data=meanVals)#bad:) 
+
+#get difference between this value and the simulated values
+mad_train <- as.numeric()
+rmse_train <- as.numeric()
+n.index <- max(out1_train$index)
+for(i in 1:n.index){
+  mad_train[i] <- mean(abs(totalsInfo_year5[!is.na(totalsInfo_year5)] - 
+                       out1_train$value[out1_train$index==i][!is.na(totalsInfo_year5)]))
+  rmse_train[i] <- sqrt(mean((totalsInfo_year5[!is.na(totalsInfo_year5)] - 
+                        out1_train$value[out1_train$index==i][!is.na(totalsInfo_year5)])^2))
+}
+
+summary(mad)
+hist(mad)
+hist(rmse)
+
+#test data
+#get training data
+out1_test <- subset(ggd,grepl("mid.expNuIndivs_test",ggd$Parameter))
+out1_test$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_test$Parameter))
+out1_test$index <- as.numeric(interaction(out1_test$Iteration,out1_test$Chain))
+
+#get actual NuIndiv
+test_fold <- myFolds[grepl("test",myFolds)]
+totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV",test_fold,sep="/"))
+totalsInfo_year5 <- totalsInfo[,5]
+
+#check they are consistent:
+length(unique(out1_test$siteIndex)) == dim(totalsInfo)[1]
+
+#plot correlation between mean values
+meanVals <- plyr::ddply(out1_test,"siteIndex",summarise,pred=median(value))
+meanVals$obs <- totalsInfo_year5
+qplot(obs,pred,data=meanVals)#bad:) 
+
+#get difference between this value and the simulated values
+mad_test <- as.numeric()
+rmse_test <- as.numeric()
+n.index <- max(out1_test$index)
+for(i in 1:n.index){
+  mad_test[i] <- mean(abs(totalsInfo_year5[!is.na(totalsInfo_year5)] - 
+                       out1_test$value[out1_test$index==i][!is.na(totalsInfo_year5)]))
+  rmse_test[i] <- sqrt(mean((totalsInfo_year5[!is.na(totalsInfo_year5)] - 
+                          out1_test$value[out1_test$index==i][!is.na(totalsInfo_year5)])^2))
+}
+
+summary(mad_test)
+hist(mad_test)
+hist(rmse_test)
+
+#### COMBINED model #####################################
 
 out1 <- readRDS("model-outputs/outSummary_simpleCombinedModel.rds")
 out1[row.names(out1)=="totalAbund",]
