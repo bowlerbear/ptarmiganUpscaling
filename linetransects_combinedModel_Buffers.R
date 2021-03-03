@@ -5,6 +5,8 @@ library(rgeos)
 library(raster)
 library(maptools)
 
+source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R', encoding = 'UTF-8')
+
 #specify top level folder
 myfolder <- "Data" #on local PC
 #myfolder <- "/data/idiv_ess/ptarmiganUpscaling" #HPC
@@ -103,52 +105,29 @@ hist(siteMeans$meanNu)
 summary(siteMeans$meanNu)
 
 glm1 <- lm(log(meanNu+1) ~ scale(bio1) + scale(bio5) + scale(bio6) + 
-            Open + PrefOpen + PrefClosed +
+            Forest + Bog + ODF + OSF + Mire + SnowBeds + Human + 
             scale(tree_line) + 
             scale(elevation)+
             scale(elevation^2),
             data=siteMeans)
 summary(glm1)
-#                       Estimate Std. Error t value Pr(>|t|)    
-# (Intercept)         1.9044860  0.1466637  12.985  < 2e-16 ***
-#   scale(bio1)         0.1607169  0.0633338   2.538  0.01142 *  
-#   scale(bio5)        -0.0525747  0.0364160  -1.444  0.14935    
-#   scale(bio6)         0.0653411  0.0593270   1.101  0.27119    
-#   Open                0.0014211  0.0007037   2.019  0.04389 *  
-#   PrefOpen            0.0006222  0.0005126   1.214  0.22537    
-#   PrefClosed         -0.0006118  0.0013092  -0.467  0.64044    
-#   scale(tree_line)   -0.2987196  0.0979224  -3.051  0.00239 ** 
-#   scale(elevation)    1.0294777  0.1732242   5.943 4.79e-09 ***
-#   scale(elevation^2) -0.6955471  0.1222922  -5.688 2.03e-08 ***
-  
+
 library(MuMIn)
 options(na.action = "na.fail")
 dd <- dredge(glm1)
 subset(dd, delta < 2)
-
+#Bog, ODF, OSF
 
 #corrected by transect length
 summary(siteMeans$meanNu/siteMeans$meanTL)
 hist(siteMeans$meanNu/siteMeans$meanTL)
 glm1 <- lm(log(meanNu/meanTL+1) ~ scale(bio1) + scale(bio5) + scale(bio6) + 
-              Open + PrefOpen + PrefClosed +
-              scale(tree_line) + 
-              scale(elevation)+scale(elevation^2),
+             Forest + Bog + ODF + OSF + Mire + SnowBeds + Human + 
+             scale(tree_line) + 
+             scale(elevation)+
+             scale(elevation^2),
               data=siteMeans)
 summary(glm1)
-Coefficients:
-  Coefficients:
-  #                       Estimate Std. Error t value Pr(>|t|)    
-  # (Intercept)         3.664e-03  5.397e-04   6.788 2.78e-11 ***
-  # scale(bio1)         3.241e-04  2.331e-04   1.390   0.1649    
-  # scale(bio5)        -5.421e-04  1.340e-04  -4.045 5.93e-05 ***
-  # scale(bio6)         5.047e-04  2.183e-04   2.312   0.0211 *  
-  # Open               -2.339e-06  2.590e-06  -0.903   0.3669    
-  # PrefOpen            1.398e-06  1.887e-06   0.741   0.4590    
-  # PrefClosed         -9.982e-06  4.818e-06  -2.072   0.0387 *  
-  # scale(tree_line)   -5.929e-04  3.604e-04  -1.645   0.1005    
-  # scale(elevation)    3.321e-03  6.375e-04   5.209 2.63e-07 ***
-  # scale(elevation^2) -2.236e-03  4.500e-04  -4.969 8.82e-07 ***
 
 ### brt #########################################################################
 
@@ -159,29 +138,28 @@ library(gbm)
 siteMeans$meanNu <- log(siteMeans$meanNu/siteMeans$meanTL+1)
 
 brt1 <- gbm.step(data=siteMeans, 
-                 gbm.x = c(4:13,16:22), 
+                 gbm.x = c(4:16,18:20), 
                  gbm.y = 2,
                  family = 'gaussian')
 
 summary(brt1)
-#                                   var     rel.inf
-# bio6                             bio6 23.59032517
-# tree_line                   tree_line 22.84091205
-# bio5                             bio5 12.76908910
-# elevation                   elevation 10.83059745
-# PrefOpen                     PrefOpen  7.75299072
-# bio1                             bio1  3.76294838
-# alpine_habitat2       alpine_habitat2  3.16039800
-# tree_line_position tree_line_position  3.05851428
-# Top                               Top  2.79262098
-# Open                             Open  2.37575864
-# alpine_habitat3       alpine_habitat3  2.08569589
-# PrefClosed                 PrefClosed  1.86873326
-# Bottom                         Bottom  1.45702810
-# Forest                         Forest  1.41170978
-# Agriculture               Agriculture  0.20984804
-# alpine_habitat1       alpine_habitat1  0.03283015
-# alpine_habitat4       alpine_habitat4  0.00000000
+#                                     var   rel.inf
+# bio6                               bio6 24.752324
+# tree_line                     tree_line 21.612270
+# bio5                               bio5 13.032536
+# elevation                     elevation 10.661206
+# Bog                                 Bog  3.616588
+# Forest                           Forest  3.348864
+# Meadows                         Meadows  3.205215
+# tree_line_position   tree_line_position  2.834690
+# OSF                                 OSF  2.762501
+# ODF                                 ODF  2.730431
+# SnowBeds                       SnowBeds  2.561156
+# MountainBirchForest MountainBirchForest  2.460815
+# Mire                               Mire  2.204569
+# bio1                               bio1  1.568142
+# Open                               Open  1.382860
+# Human                             Human  1.265833
 
 #plot main effects
 gbm.plot(brt1, n.plots=8, write.title = TRUE)
