@@ -11,68 +11,41 @@
     b.df.0 ~ dunif(0,20)        
     b.group.size ~ dnorm(0,0.001)
 
-    for(i in 1:ndetections){
-    #linear predictor
-    mu.df[i] <- b.df.0 + b.group.size * log.detectionGroupSize[i] 
+    for(i in 1:ndetections_train){
+     #linear predictor
+     mu.df[i] <- b.df.0 + b.group.size * ln_GroupSize[i] 
     
-    # estimate of sd and var, given coeffs above
-    sig.df[i] <- exp(mu.df[i])
-    sig2.df[i] <- sig.df[i]*sig.df[i]
+     # estimate of sd and var, given coeffs above
+     sig.df[i] <- exp(mu.df[i])
+     sig2.df[i] <- sig.df[i]*sig.df[i]
     
-    # effective strip width
-    esw[i] <- sqrt(pi * sig2.df[i] / 2) 
-    f0[i] <- 1/esw[i] #assuming all detected on the line
+     # effective strip width
+     esw[i] <- sqrt(pi * sig2.df[i] / 2) 
+     f0[i] <- 1/esw[i] #assuming all detected on the line
     
-    # LIKELIHOOD
-    # using zeros trick
-    #y[i] ~ dunif(0,W) 
-    L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
-    nlogL.f0[i] <-  -log(L.f0[i])
-    zeros.dist[i] ~ dpois(nlogL.f0[i])
+     # LIKELIHOOD
+     # using zeros trick
+     #y[i] ~ dunif(0,W) 
+     L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
+     nlogL.f0[i] <-  -log(L.f0[i])
+     zeros.dist[i] ~ dpois(nlogL.f0[i])
     }
 
-    #using this model and predicted group size (below), get predicted ESW 
+    #get predicted ESW - training dataset
     for(t in 1:nyear){
-      for(j in 1:nsite){
-        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(predGroupSize[j,t]+1)) 
+      for(j in 1:nsite_train){
+        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(groupSizes_train[j,t]+1)) 
         pred.sig2[j,t] <- pow(pred.sig[j,t],2)
-        predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
+        predESW_train[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
       }
     }
-
-    ##################
-    #Group size model#
-    ##################
-
-    #priors
-    int.gs ~ dnorm(0,0.001)    
     
-    #random line effect
-    line.sd ~ dunif(0,10)
-    line.tau <- pow(line.sd,-2)
-    for(j in 1:nsite){
-      random.gs.line[j] ~ dnorm(0,line.tau)
-    }
-    
-    #random time effect
-    year.sd ~ dunif(0,10)
-    year.tau <- pow(year.sd,-2)
+    #get predicted ESW - test dataset
     for(t in 1:nyear){
-      random.gs.year[t] ~ dnorm(0,year.tau)
-    }
-
-    #Model
-    #for each detection, model group size
-    for(i in 1:ndetections){
-      GroupSize[i] ~ dpois(expGroupSize[i])
-      log(expGroupSize[i]) <- int.gs + random.gs.year[detectionYear[i]] + 
-                                      random.gs.line[detectionSite[i]] 
-    }
-
-    #using this model, get predicted group size for each line and year
-    for(t in 1:nyear){
-      for(j in 1:nsite){
-        log(predGroupSize[j,t]) <- int.gs + random.gs.year[t] + random.gs.line[j] 
+      for(j in 1:nsite_test){
+        pred.sig_test[j,t] <- exp(b.df.0 + b.group.size * log(groupSizes_test[j,t]))
+        pred.sig2_test[j,t] <- pow(pred.sig_test[j,t],2)
+        predESW_test[j,t] <- sqrt(pi * pred.sig2_test[j,t] / 2)
       }
     }
 
@@ -86,7 +59,7 @@
     #random line effect
     line.d.sd ~ dunif(0,10)
     line.d.tau <- pow(line.d.sd,-2)
-    for(j in 1:nsite){
+    for(j in 1:nsite_train){
       random.d.line[j] ~ dnorm(0,line.d.tau)
     }
     
@@ -103,48 +76,56 @@
     }
 
     #Observation model:
-    for(j in 1:nsite){
+    for(j in 1:nsite_train){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- (Density.jt[j,t] * (TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2))
+        expNuIndivs[j,t] <- (Density.jt[j,t] * (TransectLength_train[j,t]/1000 * predESW_train[j,t]/1000 * 2))
       }}
 
     #State model
-    for(j in 1:nsite){
+    for(j in 1:nsite_train){
       for(t in 1:nyear){
       
       #linear predictor on density
-        log(Density.jt[j,t]) <- int.d + 
-                            random.d.line[j] + 
-                            random.d.year[t] +
-                            inprod(beta[],occDM[j,]) 
+        log(Density.jt[j,t]) <- int.d 
+                            #random.d.line[j] + 
+                            #random.d.year[t] +
+                            #inprod(beta[],occDM_train[j,]) 
 
     }}
 
 
-    for(j in 1:nsite){
+    for(j in 1:nsite_train){
       Density[j] <- sum(Density.jt[j,1:nyear])/nyear
     }
 
- 
+
+    #Test dataset:
+    
     #get predicted Density values for the training dataset
     
-    for(j in 1:nsite){
+    for(j in 1:nsite_test){
       for(t in 1:nyear){
       
+      expNuIndivs_test[j,t] <- (Density.jt_test[j,t] * (TransectLength_test[j,t]/1000 * predESW_test[j,t]/1000 * 2))
+      
       #linear predictor on density
-        log(Density.jt.test[j,t]) <- int.d + 
-                            random.d.year[t] +
-                            inprod(beta[],occDM_test[j,]) 
+        log(Density.jt_test[j,t]) <- int.d 
+                            #random.d.year[t] +
+                            #inprod(beta[],occDM_test[j,]) 
 
-    }}
-
-
-    for(j in 1:nsite){
-      Density.test[j] <- sum(Density.jt.test[j,1:nyear])/nyear
+      }
     }
  
- 
+    #pull out mid year data
+    for(j in 1:nsite_train){
+      mean.expNuIndivs_train[j] <- mean(expNuIndivs[j,])
+    }
+    
+     for(j in 1:nsite_test){
+      mean.expNuIndivs_test[j] <- mean(expNuIndivs_test[j,])
+    }
+    
     
     }
     
