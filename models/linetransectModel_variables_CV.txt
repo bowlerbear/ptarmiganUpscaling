@@ -79,7 +79,7 @@
     for(j in 1:nsite_train){
       for(t in 1:nyear){
         NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- (Density.jt[j,t] * (TransectLength_train[j,t]/1000 * predESW_train[j,t]/1000 * 2))
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength_train[j,t]/1000 * 106/1000 * 2
       }}
 
     #State model
@@ -87,43 +87,41 @@
       for(t in 1:nyear){
       
       #linear predictor on density
-        log(Density.jt[j,t]) <- int.d 
-                            #random.d.line[j] + 
-                            #random.d.year[t] +
-                            #inprod(beta[],occDM_train[j,]) 
+        log(Density.jt[j,t]) <- int.d +  
+                                random.d.year[t] +
+                                inprod(beta[],occDM_train[j,])
+                                #random.d.line[j] 
+                            
+                             
 
     }}
 
 
-    for(j in 1:nsite_train){
-      Density[j] <- sum(Density.jt[j,1:nyear])/nyear
-    }
-
-
     #Test dataset:
-    
-    #get predicted Density values for the training dataset
     
     for(j in 1:nsite_test){
       for(t in 1:nyear){
       
-      expNuIndivs_test[j,t] <- (Density.jt_test[j,t] * (TransectLength_test[j,t]/1000 * predESW_test[j,t]/1000 * 2))
+      expNuIndivs_test[j,t] <- Density.jt_test[j,t] * TransectLength_test[j,t]/1000 * 106/1000 * 2
       
       #linear predictor on density
-        log(Density.jt_test[j,t]) <- int.d 
-                            #random.d.year[t] +
-                            #inprod(beta[],occDM_test[j,]) 
+        log(Density.jt_test[j,t]) <- int.d +
+                            random.d.year[t] +
+                            inprod(beta[],occDM_test[j,]) 
 
       }
     }
  
-    #pull out mid year data
+    #pull out mean data
+    
     for(j in 1:nsite_train){
-      mean.expNuIndivs_train[j] <- mean(expNuIndivs[j,])
+      mean.Density_train[j] <- sum(Density.jt[j,1:nyear])/nyear
+      mean.expNuIndivs_train[j] <- sum(expNuIndivs[j,1:nyear])/nyear
     }
     
      for(j in 1:nsite_test){
-      mean.expNuIndivs_test[j] <- mean(expNuIndivs_test[j,])
+      mean.Density_test[j] <- sum(Density.jt_test[j,1:nyear])/nyear
+      mean.expNuIndivs_test[j] <- sum(expNuIndivs_test[j,1:nyear])/nyear
     }
     
     
