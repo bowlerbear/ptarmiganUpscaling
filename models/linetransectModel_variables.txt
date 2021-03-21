@@ -1,5 +1,43 @@
 
     model{
+    
+    #################
+    #Detection model#
+    #################
+    
+    pi <- 3.141593
+    
+    # priors for fixed effect parms for half-normal detection parm sigma
+    b.df.0 ~ dunif(0,20)        
+    b.group.size ~ dnorm(0,0.01)
+
+    for(i in 1:ndetections){
+    #linear predictor
+    mu.df[i] <- b.df.0 + b.group.size * ln_GroupSize[i] 
+    
+    # estimate of sd and var, given coeffs above
+    sig.df[i] <- exp(mu.df[i])
+    sig2.df[i] <- sig.df[i]*sig.df[i]
+    
+    # effective strip width
+    esw[i] <- sqrt(pi * sig2.df[i] / 2) 
+    f0[i] <- 1/esw[i] #assuming all detected on the line
+    
+    # LIKELIHOOD
+    # using zeros trick
+    L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
+    nlogL.f0[i] <-  -log(L.f0[i])
+    zeros.dist[i] ~ dpois(nlogL.f0[i])
+    }
+
+    #using this model and predicted group size (below), get predicted ESW 
+    for(t in 1:nyear){
+      for(j in 1:nsite){
+        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(GroupSizes[j,t]+1)) 
+        pred.sig2[j,t] <- pow(pred.sig[j,t],2)
+        predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
+      }
+    }
 
     ########################
     #Model of total density#
@@ -46,10 +84,12 @@
 
 
     #Observation model:
+    r ~ dunif(0,50)
     for(j in 1:nsite){
       for(t in 1:nyear){
-        NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * 106/1000 * 2
+        NuIndivs[j,t] ~ dnegbin(p[j,t],r)
+        p[j,t] <- r/(r+expNuIndivs[j,t])
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
       }
     }
     
@@ -59,30 +99,32 @@
       
       #linear predictor on density
         log(Density.jt[j,t]) <- int.d + 
-                            random.d.line[j] +
-                            #random.d.adm [j] +
                             random.d.year[t] +
-                            random.d.obs[j,t] +
-                            inprod(beta[],occDM[j,]) 
+                            inprod(beta[],occDM[j,]) +
+                            random.d.adm[adm[j]] 
+                            #random.d.line[j] 
+                            
+                            
 
     }}
     
-    #for mean Density at observed sites
+    #predict observations - original scale and density scale
     for(j in 1:nsite){
-      log(Dens_lt[j]) <- int.d + random.d.line[j] + inprod(beta[],occDM[j,]) 
+      #original scale
       meanExpNu[j] <- mean(expNuIndivs[j,])
-      ExpNu_5[j] <- expNuIndivs[j,5] 
+      #density scale 
+      meanDensity[j] <- mean(Density.jt[j,])
       
     }
     
   
     #mean density at grids across Norway
-    for(j in 1:npreds){
-      log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) 
-      Density[j] <- Density.km[j]*25 # since there are 25 km per grid
-    }
+    #for(j in 1:npreds){
+    #  log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) 
+    #  Density[j] <- Density.km[j]*25 # since there are 25 km per grid
+    #}
 
-    totalPop <- sum(Density)
+    #totalPop <- sum(Density)
 
     #calculate the Bayesian p-value
     e <- 0.0001
