@@ -210,7 +210,7 @@ ggplot(betas)+
 
 #full data model
 
-out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
+out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables_v3.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 
@@ -218,49 +218,56 @@ out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("meanExpNu",out1$Param))
 dataMeans <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
 preds$data <- as.numeric(dataMeans)
+#main plot
 qplot(data,mean,data=preds)+
   geom_abline(intercept=0,slope=1)
-#correlated but always underestimated
-
-#year 5 data
-preds <- subset(out1,grepl("ExpNu_5",out1$Param))
-dataMeans <- bugs.data$NuIndivs[,5]
-preds$data <- as.numeric(dataMeans)
+#correlated but noisey
+#on log-scale
 qplot(data,mean,data=preds)+
-  geom_abline(intercept=0,slope=1)
-#almost perfect...
-cor(preds$data,preds$mean)#99
+  geom_abline(intercept=0,slope=1)+
+  scale_x_log10()+scale_y_log10()#not bad, but not great
+cor.test(log(preds$data),log(preds$mean))
+#v1 - correlation is 0.358
+#v2 - correlation is 0.367
+#v3 - correlation is 0.374
+#BPV
+hist(out1$mean[out1$Param=="bpv"])
+summary(out1$mean[out1$Param=="bpv"])
 
 #CV fold models
-
 library(ggmcmc)
 
 #get all files for fold 1
-fold <- 3
+fold <- 1
+#folder <- "null"
+folder <- "environ_only"
+
+myFiles <- list.files(paste0("model-outputs/linetransectModel_CV/",folder))
 myFolds <- myFiles[grepl(paste0("_",fold,".rds"),myFiles)]
 
 #read in main model
-out1 <- readRDS(paste("model-outputs/linetransectModel_CV",myFolds[1],sep="/"))
+out1 <- readRDS(paste("model-outputs/linetransectModel_CV",folder,myFolds[1],sep="/"))
 ggd <- ggs(out1$samples)
 #we have mid.expNuIndivs_test, 
 #mid.expNuIndivs_train
 
 #get training data
-out1_train <- subset(ggd,grepl("mid.expNuIndivs_train",ggd$Parameter))
+
+out1_train <- subset(ggd,grepl("mean.expNuIndivs_train",ggd$Parameter))
 out1_train$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_train$Parameter))
 out1_train$index <- as.numeric(interaction(out1_train$Iteration,out1_train$Chain))
 
 #get actual NuIndiv
 train_fold <- myFolds[grepl("train",myFolds)]
-totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV",train_fold,sep="/"))
-totalsInfo_year5 <- totalsInfo[,5]
+totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV/",folder,train_fold,sep="/"))
+totalsInfo_mean <- rowMeans(totalsInfo,na.rm=T)
 
 #check they are consistent:
 length(unique(out1_train$siteIndex)) == dim(totalsInfo)[1]
 
 #plot correlation between mean values
 meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=median(value))
-meanVals$obs <- totalsInfo_year5
+meanVals$obs <- totalsInfo_mean
 qplot(obs,pred,data=meanVals)#bad:) 
 
 #get difference between this value and the simulated values
@@ -277,6 +284,26 @@ for(i in 1:n.index){
 summary(mad)
 hist(mad)
 hist(rmse)
+
+#compare the density estimates and the raw density estimates
+out1_train <- subset(ggd,grepl("mean.Density_train",ggd$Parameter))
+out1_train$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_train$Parameter))
+out1_train$index <- as.numeric(interaction(out1_train$Iteration,out1_train$Chain))
+
+#get observed densities
+train_fold <- myFolds[grepl("train",myFolds)]
+totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV/",folder,train_fold,sep="/"))
+densityInfo <- totalsInfo/(transectLengths/1000 * 106/1000 *2)
+densityInfo_mean <- rowMeans(densityInfo,na.rm=T)
+
+#check they are consistent:
+length(unique(out1_train$siteIndex)) == length(densityInfo_mean)
+
+#plot correlation between mean values
+meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=median(value))
+meanVals$obs <- densityInfo_mean
+qplot(obs,pred,data=meanVals) 
+
 
 #test data
 #get training data
