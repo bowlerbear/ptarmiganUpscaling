@@ -84,7 +84,6 @@ transectLengths <- reshape2::acast(tlDF_train,siteIndex~Year,value.var="length")
 groupInfo[transectLengths==0] <- NA
 totalsInfo[transectLengths==0] <- NA
 sum(as.numeric(totalsInfo),na.rm=T)
-#67946
 
 #check alignment with other datasets
 all(row.names(groupInfo)==siteInfo_train$siteIndex)
@@ -143,7 +142,8 @@ bugs.data$occDM_train <- model.matrix(~ bufferData_train$tree_line +
                                   bufferData_train$bio1 +
                                   bufferData_train$bio5 +
                                   bufferData_train$elevation +
-                                  bufferData_train$Open)[,-1]
+                                  bufferData_train$Bog+
+                                  bufferData_train$Forest)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
@@ -156,7 +156,8 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$tree_line +
                                         bufferData_test$bio1 +
                                         bufferData_test$bio5 +
                                         bufferData_test$elevation +
-                                        bufferData_test$Open)[,-1]
+                                        bufferData_test$Bog +
+                                        bufferData_test$Forest)[,-1]
 
 ### fit model #################################################
 
@@ -186,13 +187,15 @@ saveRDS(out1$summary,file="outSummary_linetransectModel_CV.rds")
 
 #update to extract cross validation comparisons
 out2 <- update(out1,
-               parameters.to.save = c("mean.expNuIndivs_train","mean.expNuIndivs_test"),
+               parameters.to.save = c("mean.expNuIndivs_train","mean.expNuIndivs_test",
+                                      "mean.Density_train","mean.Density_test"),
                n.iter = 1000)
 
 saveRDS(out2,file=paste0("out_update_linetransectModel_CV_",fold.id,".rds"))
 
-saveRDS(totalsInfo_test,file=paste0("totalsInfo_test_CV_",fold.id,".rds"))
+#and save test and training dataset
 saveRDS(totalsInfo,file=paste0("totalsInfo_train_CV_",fold.id,".rds"))
+saveRDS(totalsInfo_test,file=paste0("totalsInfo_test_CV_",fold.id,".rds"))
 
 ### end ########################################################################
 
