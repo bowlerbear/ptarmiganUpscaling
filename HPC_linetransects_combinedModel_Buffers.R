@@ -98,12 +98,14 @@ bugs.data <- list(#For the state model
   ndetections = nrow(allDetections),
   y = allDetections$LinjeAvstand,
   ln_GroupSize = log(allDetections$totalIndiv+1),
-  GroupSize = (allDetections$totalIndiv-1),#so it can start at 0
+  GroupSizes =  groupSizes,
   detectionYear = allDetections$yearIndex,
   detectionSite = allDetections$siteIndex,
   zeros.dist = rep(0,nrow(allDetections)))
 
 names(bugs.data)
+
+bugs.data$GroupSizes[is.na(bugs.data$GroupSizes)] <- 0
 
 ### get environ data #########################################
 
@@ -113,25 +115,29 @@ all(bufferData$LinjeID==siteInfo$LinjeID)
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ bufferData$tree_line +
                                   bufferData$bio1 +
-                                  bufferData$bio5 +
+                                  bufferData$bio1^2 +
+                                  bufferData$bio6 +
+                                  bufferData$Meadows +
+                                  bufferData$OSF +
+                                  bufferData$ODF +
                                   bufferData$elevation +
                                   bufferData$Bog +
                                   bufferData$Forest)[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
-siteInfo_ArtsDaten <- readRDS(paste(myfolder,
-                                    "siteInfo_ArtsDaten.rds",sep="/"))
-
-environData <- siteInfo_ArtsDaten[,c(12:33)]
-bugs.data$predDM <- model.matrix(~ environData$tree_line +
-                                   environData$bio1 +
-                                   environData$bio5 +
-                                   environData$elevation + 
-                                   environData$Bog +
-                                   environData$Forest)[,-1]
-
-bugs.data$npreds <- nrow(environData)
+# siteInfo_ArtsDaten <- readRDS(paste(myfolder,
+#                                     "siteInfo_ArtsDaten.rds",sep="/"))
+# 
+# environData <- siteInfo_ArtsDaten[,c(12:33)]
+# bugs.data$predDM <- model.matrix(~ environData$tree_line +
+#                                    environData$bio1 +
+#                                    environData$bio5 +
+#                                    environData$elevation + 
+#                                    environData$Bog +
+#                                    environData$Forest)[,-1]
+# 
+# bugs.data$npreds <- nrow(environData)
 
 ### fit model #################################################
 
@@ -141,11 +147,9 @@ library(jagsUI)
 #params <- c("int.d","line.d.sd","year.d.sd",
 #            "beta","bpv","totalPop","Density","Dens_lt")
 
-params <- c("Dens_lt","Density","meanExpNu","ExpNu_5")
+params <- c("int.d","beta","meanDensity","meanExpNu","bpv","expNuIndivs")
 
 modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
-
-#add adm to model eventually
 
 out1 <- jags(bugs.data, 
              inits=NULL, 
@@ -161,3 +165,30 @@ saveRDS(out1$summary,file="outSummary_linetransectModel_variables.rds")
 
 ### end #######################################################
 
+#v 1
+# bugs.data$occDM <- model.matrix(~ bufferData$tree_line +
+#                                   bufferData$bio1 +
+#                                   bufferData$bio5 +
+#                                   bufferData$elevation +
+#                                   bufferData$Bog +
+#                                   bufferData$Forest)[,-1]
+
+
+
+#v2
+# bugs.data$occDM <- model.matrix(~ bufferData$tree_line +
+#                                   bufferData$bio1 +
+#                                   bufferData$bio1^2 +
+#                                   bufferData$bio6 +
+#                                   bufferData$Meadows +
+#                                   bufferData$OSF +
+#                                   bufferData$ODF +
+#                                   bufferData$elevation +
+#                                   bufferData$Bog +
+#                                   bufferData$Forest)[,-1]
+
+#v3
+#as v2 except with random adm effect
+
+#v4
+#as V3 except with ESW model
