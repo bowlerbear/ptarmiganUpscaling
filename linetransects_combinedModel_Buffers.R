@@ -76,7 +76,8 @@ bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
 siteMeans <- merge(siteMeans,bufferData,by="LinjeID")
 siteMeans <- subset(siteMeans,!is.na(tree_line))
 
-siteMeans$adm <- mergeCounties(siteMeans$adm,further=TRUE)#needs to be done again
+siteMeans$adm <- mergeCounties(siteMeans$adm,further=TRUE)
+table(siteMeans$adm)
 
 ### get spatial polygons ###########################################
 
@@ -103,12 +104,15 @@ tm_shape(NorwayOrig) +
 
 hist(siteMeans$meanNu)
 summary(siteMeans$meanNu)
+hist(log(siteMeans$meanNu+1))
 
-glm1 <- lm(log(meanNu+1) ~ scale(bio1) + scale(bio5) + scale(bio6) + 
+glm1 <- lm(log(meanNu+1) ~ scale(bio5) + scale(bio6) + 
             Forest + Bog + ODF + OSF + Mire + SnowBeds + Human + 
+            scale(y) +
+            scale(distCoast) +
             scale(tree_line) + 
-            scale(elevation)+
-            scale(elevation^2),
+            scale(elevation),
+            offset=log(meanTL),
             data=siteMeans)
 summary(glm1)
 
@@ -116,18 +120,7 @@ library(MuMIn)
 options(na.action = "na.fail")
 dd <- dredge(glm1)
 subset(dd, delta < 2)
-#Bog, ODF, OSF
-
-#corrected by transect length
-summary(siteMeans$meanNu/siteMeans$meanTL)
-hist(siteMeans$meanNu/siteMeans$meanTL)
-glm1 <- lm(log(meanNu/meanTL+1) ~ scale(bio1) + scale(bio5) + scale(bio6) + 
-             Forest + Bog + ODF + OSF + Mire + SnowBeds + Human + 
-             scale(tree_line) + 
-             scale(elevation)+
-             scale(elevation^2),
-              data=siteMeans)
-summary(glm1)
+#bog, forest, mire, ODF, OSF,bio5, bio6, distCoast,treeline, y
 
 ### brt #########################################################################
 
@@ -138,33 +131,24 @@ library(gbm)
 siteMeans$meanNu <- log(siteMeans$meanNu/siteMeans$meanTL+1)
 
 brt1 <- gbm.step(data=siteMeans, 
-                 gbm.x = c(4:16,18:20), 
+                 gbm.x = c(4:16,18:20,26,27), 
                  gbm.y = 2,
                  family = 'gaussian')
 
 summary(brt1)
-#                                     var   rel.inf
-# bio6                               bio6 24.752324
-# tree_line                     tree_line 21.612270
-# bio5                               bio5 13.032536
-# elevation                     elevation 10.661206
-# Bog                                 Bog  3.616588
-# Forest                           Forest  3.348864
-# Meadows                         Meadows  3.205215
-# tree_line_position   tree_line_position  2.834690
-# OSF                                 OSF  2.762501
-# ODF                                 ODF  2.730431
-# SnowBeds                       SnowBeds  2.561156
-# MountainBirchForest MountainBirchForest  2.460815
-# Mire                               Mire  2.204569
-# bio1                               bio1  1.568142
-# Open                               Open  1.382860
-# Human                             Human  1.265833
+#                                     var    rel.inf
+# y                                     y 26.2817454#nonlinear
+# bio6                               bio6 17.2973079
+# distCoast                     distCoast 12.2791788
+# bio5                               bio5 11.5308334
+# tree_line                     tree_line  8.5324660
+# elevation                     elevation  4.1847467
+# Bog                                 Bog  3.7565941
+# Meadows                         Meadows  3.0434379
+# Forest                           Forest  2.4127264
 
 #plot main effects
-gbm.plot(brt1, n.plots=8, write.title = TRUE)
-gbm.plot.fits(brt1)
-#non-linear plot for tree line position and bio1
+gbm.plot(brt1, n.plots=12, write.title = TRUE)
 
 #interactions?
 find.int <- gbm.interactions(brt1)
