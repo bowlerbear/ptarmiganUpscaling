@@ -29,16 +29,16 @@ allData$LengdeTaksert[which(allData$LinjeID==1405&allData$LengdeTaksert==1100)] 
 #Get statistics per year and line
 tlDF <- allData %>%
   dplyr::group_by(LinjeID,Year) %>%
-  dplyr::summarise(nuGroups=length(totalIndiv[!is.na(totalIndiv)]),
+  dplyr::summarise(nuGroups=length(totalIndiv[!is.na(totalIndiv) & totalIndiv!=0]),
                    totalsInfo=sum(totalIndiv,na.rm=T),
-                   groupSize=mean(totalIndiv,na.rm=T),
+                   groupSize=mean(totalIndiv[!is.na(totalIndiv) & totalIndiv!=0]),
                    length = mean(LengdeTaksert,na.rm=T))
 sum(tlDF$totalsInfo,na.rm=T)
 #67946
 
-#insert NA when there is no transect but evidence of a survey
+#insert NA when there is no transect 
 tlDF$length[is.na(tlDF$length)] <- 0
-tlDF$nuGroups[tlDF$length==0 ] <- NA
+tlDF$nuGroups[tlDF$length==0] <- NA
 tlDF$totalsInfo[tlDF$length==0] <- NA
 tlDF$groupSize[tlDF$length==0] <- NA
 summary(tlDF)
@@ -47,7 +47,6 @@ sum(tlDF$length==0)#1302
 ### get environ data #################################################
 
 bufferData <- readRDS(paste(myfolder,"varDF_allEnvironData_buffers_idiv.rds",sep="/"))
-#why are some missing???
 tlDF <- subset(tlDF, LinjeID %in% bufferData$LinjeID)
 
 ### make siteInfo ######################################
@@ -83,6 +82,7 @@ transectLengths <- reshape2::acast(tlDF_train,siteIndex~Year,value.var="length")
 #put NAs where transect length is zero
 groupInfo[transectLengths==0] <- NA
 totalsInfo[transectLengths==0] <- NA
+groupSizes[groupSizes==0] <- NA
 sum(as.numeric(totalsInfo),na.rm=T)
 
 #check alignment with other datasets
@@ -90,17 +90,18 @@ all(row.names(groupInfo)==siteInfo_train$siteIndex)
 
 ### detection data ################################################
 
-allDetections <- subset(allData, !is.na(totalIndiv) & totalIndiv!=0 & LinjeID %in% siteInfo_train$LinjeID)
+allDetections <- subset(allData, !is.na(totalIndiv) & totalIndiv!=0 
+                        & LinjeID %in% siteInfo_train$LinjeID)
 allDetections$yearIndex <- as.numeric(factor(allDetections$Year))
 allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$LinjeID,
                                                     siteInfo$LinjeID)]
 
 #use raw data as predictor in model on sigma
-groupSizes[is.na(groupSizes)] <- 0
+groupSizes[is.na(groupSizes)] <- median(groupSizes,na.rm=T)
 
 #same for testing dataset
 groupSizes_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="groupSize")
-groupSizes_test[is.na(groupSizes_test)] <- 0
+groupSizes_test[is.na(groupSizes_test)] <- median(groupSizes_test,na.rm=T)
 transectLengths_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="length")
 totalsInfo_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="totalsInfo")
 
@@ -121,7 +122,7 @@ bugs.data <- list(#For the state model
   W = 200,
   ndetections_train = nrow(allDetections),
   y = allDetections$LinjeAvstand,
-  ln_GroupSize = log(allDetections$totalIndiv+1),
+  ln_GroupSize = log(allDetections$totalIndiv),
   groupSizes_train = groupSizes,
   groupSizes_test = groupSizes_test,
   zeros.dist = rep(0,nrow(allDetections)))
@@ -140,7 +141,9 @@ all(siteInfo_train$LinjeID==bufferData_train$LinjeID)
 #add new variables to the bugs data
 bugs.data$occDM_train <- model.matrix(~ bufferData_train$tree_line +
                                   bufferData_train$bio1 +
-                                  bufferData_train$bio5 +
+                                  bufferData_train$bio1^2 +
+                                  bufferData_train$bio6 +
+                                  bufferData_train$Meadows +   
                                   bufferData_train$elevation +
                                   bufferData_train$Bog+
                                   bufferData_train$Forest)[,-1]
@@ -154,7 +157,9 @@ all(siteInfo_test$LinjeID==bufferData_test$LinjeID)
 #add new variables to the bugs data
 bugs.data$occDM_test <- model.matrix(~ bufferData_test$tree_line +
                                         bufferData_test$bio1 +
-                                        bufferData_test$bio5 +
+                                        bufferData_test$bio1^2 +
+                                        bufferData_test$bio6 +
+                                        bufferData_test$Meadows +
                                         bufferData_test$elevation +
                                         bufferData_test$Bog +
                                         bufferData_test$Forest)[,-1]
@@ -170,7 +175,7 @@ modelfile <- paste(myfolder,"linetransectModel_variables_CV.txt",sep="/")
 
 #add adm to model eventually
 
-n.iterations <- 20000
+n.iterations <- 40000
 
 out1 <- jags(bugs.data, 
              inits=NULL, 
