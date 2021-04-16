@@ -10,10 +10,17 @@
     # priors for fixed effect parms for half-normal detection parm sigma
     b.df.0 ~ dunif(0,20)        
     b.group.size ~ dnorm(0,0.01)
-
+    
+    #adm random effect on detection
+    for(i in 1:nadm){
+      b.adm[i] ~ dnorm(0,b.adm.tau)
+    }
+    b.adm.sd ~ dunif(0,10)
+    b.adm.tau <- pow(b.adm.sd,-2)
+    
     for(i in 1:ndetections){
     #linear predictor
-    mu.df[i] <- b.df.0 + b.group.size * ln_GroupSize[i] 
+    mu.df[i] <- b.df.0 + b.group.size * ln_GroupSize[i] + b.adm[detectionAdm[i]]
     
     # estimate of sd and var, given coeffs above
     sig.df[i] <- exp(mu.df[i])
@@ -33,7 +40,7 @@
     #using this model and predicted group size (below), get predicted ESW 
     for(t in 1:nyear){
       for(j in 1:nsite){
-        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(GroupSizes[j,t]+1)) 
+        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(GroupSizes[j,t]+1) + b.adm[adm[j]]) 
         pred.sig2[j,t] <- pow(pred.sig[j,t],2)
         predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
       }
@@ -119,10 +126,10 @@
     
   
     #mean density at grids across Norway
-    #for(j in 1:npreds){
-    #  log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) 
-    #  Density[j] <- Density.km[j]*25 # since there are 25 km per grid
-    #}
+    for(j in 1:n.preds){
+      log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) + random.d.adm[pred.adm[j]]  
+      Density[j] <- Density.km[j]*25 # since there are 25 km per grid
+    }
 
     #totalPop <- sum(Density)
 
@@ -130,9 +137,16 @@
     e <- 0.0001
     for(j in 1:nsite){
       for(t in 1:nyear){
+        #expectation from model
+        #est.NuIndivs[j,t] <- (p[j,t] * r)/ (1-p[j,t])
+        
+        #compared to data
         chi2[j,t] <- pow((NuIndivs[j,t] - expNuIndivs[j,t]),2) / (sqrt(expNuIndivs[j,t])+e)
-        expNuIndivs.new[j,t] ~ dpois(expNuIndivs[j,t]) 
+        
+        #compared to simulated values
+        expNuIndivs.new[j,t] ~ dnegbin(p[j,t],r) 
         chi2.new[j,t] <- pow((expNuIndivs.new[j,t] - expNuIndivs[j,t]),2) / (sqrt(expNuIndivs[j,t])+e) # exp
+        
       }
     }
     
