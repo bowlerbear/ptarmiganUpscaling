@@ -9,7 +9,7 @@
     
     # priors for fixed effect parms for half-normal detection parm sigma
     b.df.0 ~ dunif(0,20)        
-    b.group.size ~ dnorm(0,0.001)
+    b.group.size ~ dnorm(0,0.01)
 
     for(i in 1:ndetections_train){
      #linear predictor
@@ -34,7 +34,7 @@
     #get predicted ESW - training dataset
     for(t in 1:nyear){
       for(j in 1:nsite_train){
-        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(groupSizes_train[j,t]+1)) 
+        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(groupSizes_train[j,t])) 
         pred.sig2[j,t] <- pow(pred.sig[j,t],2)
         predESW_train[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
       }
@@ -72,14 +72,16 @@
 
     #covariate effects
     for(i in 1:n.covs){
-      beta[i] ~ dnorm(0,0.1)
+      beta[i] ~ dnorm(0,0.01)
     }
 
     #Observation model:
+    r ~ dunif(0,50)
     for(j in 1:nsite_train){
       for(t in 1:nyear){
-        NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
-        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength_train[j,t]/1000 * 106/1000 * 2
+        NuIndivs[j,t] ~ dnegbin(p[j,t],r)
+        p[j,t] <- r/(r+expNuIndivs[j,t])
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength_train[j,t]/1000 * predESW_train[j,t]/1000 * 2
       }}
 
     #State model
@@ -90,9 +92,6 @@
         log(Density.jt[j,t]) <- int.d +  
                                 random.d.year[t] +
                                 inprod(beta[],occDM_train[j,])
-                                #random.d.line[j] 
-                            
-                             
 
     }}
 
@@ -102,7 +101,7 @@
     for(j in 1:nsite_test){
       for(t in 1:nyear){
       
-      expNuIndivs_test[j,t] <- Density.jt_test[j,t] * TransectLength_test[j,t]/1000 * 106/1000 * 2
+      expNuIndivs_test[j,t] <- Density.jt_test[j,t] * TransectLength_test[j,t]/1000 * predESW_test[j,t]/1000 * 2
       
       #linear predictor on density
         log(Density.jt_test[j,t]) <- int.d +
