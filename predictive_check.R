@@ -180,10 +180,12 @@ saveRDS(siteInfo[,c("grid","siteIndex","folds")],
 
 #### for distance model ####
 
+library(blockCV)
+
 siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data for whole country
-myVars <- names(siteInfo)[c(12:24,30:36)]
+myVars <- names(siteInfo)[c(12:24,30:32,38)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -195,7 +197,6 @@ myRasters <- stack(myRasters)
 awt<- raster::brick(myRasters)
 projection(awt) <- equalM
 plot(awt)
-
 
 # get transect data
 siteInfo <- readRDS("data/siteInfo_linetransects.rds")
@@ -216,7 +217,8 @@ plot(pa_data,add=TRUE)
 sb <- spatialBlock(speciesData = pa_data,
                    species = "species",
                    rasterLayer = awt,
-                   theRange = 150000, # size of the blocks
+                   theRange = 100000,
+                   #theRange = 150000, # size of the blocks
                    k = 5,
                    selection = "random")
 
@@ -235,6 +237,11 @@ length(folds)
 #plot the folds
 siteInfo$folds <- sb$foldID
 qplot(x, y, data=siteInfo, colour=factor(folds))
+temp <- siteInfo[,c("grid","siteIndex","LinjeID","folds","admN")]
+
+#do we have each adm in each fold?
+table(temp$admN,temp$folds)#no...
+
 saveRDS(siteInfo[,c("grid","siteIndex","LinjeID","folds")],
         file="data/folds_distanceModel.rds")
 
