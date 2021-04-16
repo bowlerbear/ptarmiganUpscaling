@@ -31,10 +31,6 @@ plot(mygrid)
 gridTemp <- mygrid
 plot(Norway,add=T)
 
-#########################################################################
-
-#identify all grid cells within the buffer region
-
 ### adm #####################################################################
 
 #get info on administrative names for the grid
@@ -511,6 +507,42 @@ varDF$admGrouped <- mergeCounties(varDF$adm,further=TRUE)
 table(varDF$adm)
 table(varDF$admGrouped)
 sum(is.na(varDF$admGrouped))
+
+saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
+
+### latitude and distance to the coast ###############################################
+
+#coordinates
+mygridDF <- as.data.frame(mygrid,xy=T)
+names(mygridDF)[3] <- "grid"
+
+varDF <- merge(varDF, mygridDF, by="grid",all.x=T)
+
+#distance to coast
+sldf_coast <- rnaturalearth::ne_coastline()
+plot(sldf_coast)
+coast <- sf::st_as_sf(sldf_coast)
+
+#get points
+mygridPoints <- sf::st_as_sf(varDF[,c("grid","x","y")], 
+                            coords = c("x", "y"), crs = proj4string(NorwayADM))
+mygridPoints <- sf::st_transform(mygridPoints,sf::st_crs(coast))
+ggplot()+
+  geom_sf(data=coast)+
+  geom_sf(data=mygridPoints,color="red")
+
+#get distance between them
+mygridPoints1 <- sf::st_coordinates(mygridPoints)
+dist <- geosphere::dist2Line(p = as.matrix(mygridPoints1), 
+                             line = sldf_coast)
+
+#pack into data frame
+dist <- as.data.frame(dist)
+dist$grid <- mygridPoints$grid
+names(dist)[1] <- "distCoast"
+  
+#merge with varDF
+varDF <- merge(varDF, dist[,c(1:3,5)], by="grid", all.x=T)
 
 saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
