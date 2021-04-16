@@ -7,10 +7,9 @@
     
       z[i,t] ~ dbern(muZ[i,t]) 
       
-      logit(muZ[i,t])<- int.alpha + inprod(beta[],occDM[i,]) + 
+      logit(muZ[i,t]) <- int.alpha + inprod(beta[],occDM[i,]) + 
                           random.adm[adm[i]] + 
-                          random.year[t] +
-                          eta[i]
+                          random.year[t] 
       
     }
   }   
@@ -24,7 +23,6 @@
       logit(p[j]) <-  int.d + 
                       #beta.det.open * det.open[j] +
                       beta.effort * Effort[j] +
-                      #inprod(beta.det[],occDM[site[j],]) +
                       random.det.year[year[j]] +
                       random.det.adm[det.adm[j]]
                       
@@ -38,9 +36,10 @@
   
   #get mid years psi and z
   for(i in 1:nsite){
-    mid.z[i] <- z[i,5]
-    mid.psi[i] <- muZ[i,5]
+    mid.z[i] <- z[i,6]
+    mid.psi[i] <- muZ[i,6]
   }
+  
 
   #Priors 
 
@@ -63,11 +62,11 @@
     sd.a ~ dt(0, 1, 1)T(0,) 
     
     #site effects
-    for (i in 1:nsite) {
-      eta[i] ~ dnorm(0, tau2)       
-    } 
-    tau2 <- 1/(sigma2 * sigma2) 
-    sigma2 ~ dt(0, 1, 1)T(0,) 
+    #for (i in 1:nsite) {
+    #  eta[i] ~ dnorm(0, tau2)       
+    #} 
+    #tau2 <- 1/(sigma2 * sigma2) 
+    #sigma2 ~ dt(0, 1, 1)T(0,) 
 
     #adm effects
     for(i in 1:n.adm){
