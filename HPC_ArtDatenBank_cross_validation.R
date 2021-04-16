@@ -38,6 +38,7 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 #read in list length object (made on the Rstudio server)
 listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
+names(listlengthDF)[which(names(listlengthDF)=="y")] <- "species"
 
 #subset to May to September
 listlengthDF <- subset(listlengthDF,is.na(month)|(month > 4 & month <10))
@@ -67,7 +68,7 @@ listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
 ### Absences ###################################################################
 
 #remove missing observations
-listlengthDF <- subset(listlengthDF,!is.na(y))
+listlengthDF <- subset(listlengthDF,!is.na(species))
 siteInfo <- subset(listlengthDF,!duplicated(grid))
 siteInfo <- arrange(siteInfo,grid)
 
@@ -118,8 +119,8 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   year_train = listlengthDF_train$yearIndex,
                   Effort_test = listlengthDF_test$singleton,
                   Effort_train = listlengthDF_train$singleton,
-                  y_test = listlengthDF_test$y,
-                  y_train = listlengthDF_train$y,
+                  y_test = listlengthDF_test$species,
+                  y_train = listlengthDF_train$species,
                   #add an adm effect
                   adm_train = siteInfo_train$admN,
                   det.adm_train = listlengthDF_train$admN,
@@ -139,17 +140,14 @@ library(jagsUI)
 
 #need to specify initial values
 zst <- reshape2::acast(listlengthDF_train, 
-                       siteIndex~yearIndex, value.var="y",fun=max,na.rm=T)
+                       siteIndex~yearIndex, value.var="species",fun=max,na.rm=T)
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
 ### scale vars #################################################################
 
-siteInfo$tree_line_position <- scale(siteInfo$tree_line_position)
-siteInfo$bio1 <- scale(siteInfo$bio1)
-siteInfo$bio5 <- scale(siteInfo$bio5)
-siteInfo$bio6 <- scale(siteInfo$bio6)
-siteInfo$elevation <- scale(siteInfo$elevation)
+siteInfo$admGrouped <- as.numeric(as.factor(siteInfo$admGrouped))
+siteInfo[,-c(1:10)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:10)])
 
 siteInfo_test <- subset(siteInfo,grid %in% siteInfo_test$grid)
 siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
@@ -157,17 +155,29 @@ siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
 ### fit model ########################################################
 
 #specify model structure
-bugs.data$occDM_train <- model.matrix(~ siteInfo_train$tree_line_position + 
-                                  siteInfo_train$tree_line_position^2 +
-                                  siteInfo_train$bio1 + 
-                                  siteInfo_train$bio5 + 
-                                  siteInfo_train$bio6)[,-1]
+bugs.data$occDM_train <- model.matrix(~ scale(siteInfo_train$tree_line_position) + 
+                                  scale(siteInfo_train$tree_line_position^2) +
+                                  scale(siteInfo_train$elevation) +
+                                  scale(siteInfo_train$y) +
+                                  scale(siteInfo_train$distCoast) +
+                                  scale(siteInfo_train$bio5) +
+                                  scale(siteInfo_train$bio6) +
+                                  scale(siteInfo_train$Bog) +
+                                  scale(siteInfo_train$ODF) +
+                                  scale(siteInfo_train$Meadows) +
+                                  scale(siteInfo_train$MountainBirchForest))[,-1]
 
-bugs.data$occDM_test <- model.matrix(~ siteInfo_test$tree_line_position + 
-                                        siteInfo_test$tree_line_position^2 +
-                                        siteInfo_test$bio1 + 
-                                        siteInfo_test$bio5 + 
-                                        siteInfo_test$bio6)[,-1]
+bugs.data$occDM_test <- model.matrix(~ scale(siteInfo_test$tree_line_position) + 
+                                  scale(siteInfo_test$tree_line_position^2) +
+                                  scale(siteInfo_test$elevation) +
+                                  scale(siteInfo_test$y) +
+                                  scale(siteInfo_test$distCoast) +
+                                  scale(siteInfo_test$bio5) +
+                                  scale(siteInfo_test$bio6) +
+                                  scale(siteInfo_test$Bog) +
+                                  scale(siteInfo_test$ODF) +
+                                  scale(siteInfo_test$Meadows) +
+                                  scale(siteInfo_test$MountainBirchForest))[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM_test)
 
@@ -178,7 +188,7 @@ modelfile <- paste(myfolder,"BUGS_occuModel_upscaling_CV.txt",sep="/")
 n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 #n.cores = 3
 
-n.iterations = 200
+n.iterations = 20000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -196,7 +206,7 @@ summary(out1$Rhat$beta)
 out2 <- update(out1,
                parameters.to.save = c("mid.z_train","mid.psi_train","Py_train",
                                       "mid.z_test","mid.psi_test","Py_test"),
-               n.iter = 10)
+               n.iter = 1000)
 
 ### AUC check ############################################################
 
