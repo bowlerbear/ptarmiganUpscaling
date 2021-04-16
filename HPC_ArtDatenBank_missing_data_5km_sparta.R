@@ -58,6 +58,8 @@ listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
 
 ### Absences ###################################################################
 
+#the dataset contains missing values
+
 listlengthDF$L[is.na(listlengthDF$L)] <- 1 #set to nominal effort
 #listlengthDF$y[listlengthDF$L==0] <- 0
 
@@ -69,6 +71,7 @@ listlengthDF$yearIndex <- as.numeric(factor(listlengthDF$year))
 listlengthDF <- arrange(listlengthDF,siteIndex,yearIndex)
 
 #merge with environ data
+names(listlengthDF)[which(names(listlengthDF)=="y")] <- "species"
 listlengthDF <- merge(listlengthDF,varDF,by="grid",all.x=T)
 
 #have missing singletons as 1
@@ -95,12 +98,12 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   site = listlengthDF$siteIndex,
                   year = listlengthDF$yearIndex,
                   Effort = listlengthDF$singleton,
-                  y = listlengthDF$y,
+                  y = listlengthDF$species,#includes NAs
                   #add an adm effect
                   adm = siteInfo$admN,
                   det.adm = listlengthDF$admN,
                   det.open = scale(listlengthDF$Open),
-                  n.adm = length(unique(siteInfo$admN)),
+                  n.adm = length(unique(siteInfo$admN)),#19
                   adm2 = siteInfo$admN2,
                   det.adm2 = listlengthDF$admN2,
                   n.adm2 = length(unique(siteInfo$admN2)))
@@ -120,19 +123,28 @@ library(rjags)
 library(jagsUI)
 
 #need to specify initial values
-zst <- reshape2::acast(listlengthDF, siteIndex~yearIndex, value.var="y",fun=max,na.rm=T)
+zst <- reshape2::acast(listlengthDF, siteIndex~yearIndex, value.var="species",
+                       fun=max,na.rm=T)
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
 #saveRDS(zst,file="data/zst_ArtsDaten.rds")
 
-### fit model ########################################################
+### choose covariates ##########################################################
+
+#total grids
+nrow(varDF)#11788
+#sampled grid
+nrow(siteInfo)#11788
 
 #specify model structure
 bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
                                   scale(siteInfo$tree_line_position^2) +
-                                  scale(siteInfo$bio1) +
-                                  scale(siteInfo$bio1^2) +
+                                  scale(siteInfo$elevation) +
+                                  scale(siteInfo$y) +
+                                  scale(siteInfo$distCoast) +
+                                  scale(siteInfo$bio5) +
+                                  scale(siteInfo$bio6) +
                                   scale(siteInfo$Bog) +
                                   scale(siteInfo$ODF) +
                                   scale(siteInfo$Meadows) +
@@ -141,14 +153,15 @@ bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) +
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 #saveRDS(bugs.data,file="data/bugs.data_ArtsDaten.rds")
 
-params <- c("mean.p","beta","beta.effort",
-            "grid.z","grid.psi")
+### fit model ########################################################
+
+params <- c("mean.p","beta","beta.effort","beta.det.open","grid.z","grid.psi")
 
 modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
 
 n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 
-n.iterations = 10000
+n.iterations = 20000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
