@@ -144,6 +144,41 @@ saveRDS(centreDF@data,"data/lines_to_grids.rds")
 
 Polys_spatial <- readRDS("data/Polys_spatial.rds")
 
+### distance to coast ######################################
+
+#get coastline data -very smooth
+sldf_coast <- rnaturalearth::ne_coastline()
+plot(sldf_coast)
+coast <- sf::st_as_sf(sldf_coast)
+
+#get better coastline data? too slow
+# coastNorway <- getData('GADM', country='Norway', level=0)
+# coastSweden <- getData('GADM', country='Sweden', level=0)
+# coastFinland <- getData('GADM', country='Finland', level=0)
+# coastRussia <- getData('GADM', country='Russia', level=0)
+# coast <- sf::st_union(sf::st_as_sf(coastNorway), sf::st_as_sf(coastSweden))
+# coast <- sf::st_union(coast, sf::st_as_sf(coastFinland))
+# coast <- sf::st_union(coast, sf::st_as_sf(coastRussia))
+
+#get points
+lineCentres_xy <- lineCentres
+lineCentres <- sf::st_as_sf(data.frame(lineCentres), 
+                            coords = c("x", "y"), crs = equalM)
+lineCentres <- sf::st_transform(lineCentres,sf::st_crs(coast))
+ggplot()+
+  geom_sf(data=coast)+
+  geom_sf(data=lineCentres,color="red")
+
+#get distance between them
+lineCentres <- sf::st_coordinates(lineCentres)
+dist <- geosphere::dist2Line(p = as.matrix(lineCentres), 
+                             line = sldf_coast)
+
+#pack into data frame
+lineCentres_xy <- as.data.frame(lineCentres_xy)
+lineCentres_xy$dist <- dist[,1]
+lineCentres_xy$LinjeID <- Lines_spatial$LinjeID
+
 ### admin ##################################################
 
 #get info on administrative names for the buffers
@@ -290,6 +325,10 @@ out_Bio<-cbind(out_Bio1,bio5=out_Bio5[,2],bio6=out_Bio6[,2])
 varDF <- merge(out_Bio,myrasterDF,by="LinjeID",all=T)
 varDF <- merge(varDF,myAdm,by="LinjeID",all=T)
 
+#and with distance to coast data
+names(lineCentres_xy)[3] <- "distCoast"
+varDF <- merge(varDF,lineCentres_xy,by="LinjeID",all.x=T)
+
 ### alpine data #############################################################################
 
 setwd("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling")
@@ -335,7 +374,11 @@ varDF <- varDF[,-which(names(varDF)=="ID")]
 
 #Examine correlations among bugs variables
 library(GGally)
-ggpairs(varDF[,c(2:11,14:20)])
+ggpairs(varDF[,c(2:14,23:25)])
+
+#correlations >0.7
+#bio1 vs bio6
+#x vs y
 
 ### save #############################################################################
 
