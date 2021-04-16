@@ -66,13 +66,13 @@
   #pull out mid values 
   
   for(i in 1:nsite_train){
-    mid.z_train[i] <- z[i,5]
-    mid.psi_train[i] <- muZ[i,5]
+    mid.z_train[i] <- z[i,6]
+    mid.psi_train[i] <- muZ[i,6]
   }
   
   for(i in 1:nsite_test){
-    mid.z_test[i] <- z_test[i,5]
-    mid.psi_test[i] <- muZ_test[i,5]
+    mid.z_test[i] <- z_test[i,6]
+    mid.psi_test[i] <- muZ_test[i,6]
   }
   
 
