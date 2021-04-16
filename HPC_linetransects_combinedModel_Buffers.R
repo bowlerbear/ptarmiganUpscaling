@@ -50,6 +50,9 @@ bufferData <- readRDS(paste(myfolder,"varDF_allEnvironData_buffers_idiv.rds",sep
 #why are some missing???
 tlDF <- subset(tlDF, LinjeID %in% bufferData$LinjeID)
 
+siteInfo_ArtsDaten <- readRDS(paste(myfolder,
+                                    "siteInfo_ArtsDaten.rds",sep="/"))
+
 ### make siteInfo ######################################
 
 tlDF$siteIndex <- as.numeric(as.factor(tlDF$LinjeID))
@@ -77,11 +80,18 @@ all(row.names(groupInfo)==siteInfo$siteIndex)
 
 ### detection data ################################################
 
-allDetections <- subset(allData, !is.na(totalIndiv) & totalIndiv!=0)
+allDetections <- subset(allData, !is.na(totalIndiv) & totalIndiv!=0 
+                        & LinjeID %in% bufferData$LinjeID)
 allDetections$yearIndex <- as.numeric(factor(allDetections$Year))
 allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$LinjeID,
                                                     siteInfo$LinjeID)]
+allDetections$admN <- siteInfo$admN[match(allDetections$LinjeID,
+                                                    siteInfo$LinjeID)]
 
+
+siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrouped,
+                                                      siteInfo$adm)]
+  
 ### make bugs objects ###########################################
 
 bugs.data <- list(#For the state model
@@ -90,6 +100,7 @@ bugs.data <- list(#For the state model
   nadm = length(unique(siteInfo$admN)),
   site = siteInfo$siteIndex,
   adm = siteInfo$admN,
+  pred.adm = siteInfo_ArtsDaten$admNgrouped,
   year = (1:length(unique(allData$Year))),
   NuIndivs = totalsInfo,
   TransectLength = transectLengths,
@@ -101,6 +112,7 @@ bugs.data <- list(#For the state model
   GroupSizes =  groupSizes,
   detectionYear = allDetections$yearIndex,
   detectionSite = allDetections$siteIndex,
+  detectionAdm = allDetections$admN,
   zeros.dist = rep(0,nrow(allDetections)))
 
 names(bugs.data)
@@ -109,35 +121,53 @@ bugs.data$GroupSizes[is.na(bugs.data$GroupSizes)] <- 0
 
 ### get environ data #########################################
 
-#check everything aligns
-all(bufferData$LinjeID==siteInfo$LinjeID)
+#make the number smaller
+
+siteInfo_ArtsDaten$distCoast <- siteInfo_ArtsDaten$distCoast/10000
+siteInfo_ArtsDaten$elevation <- siteInfo_ArtsDaten$elevation/100  
+siteInfo_ArtsDaten$bio1 <- siteInfo_ArtsDaten$bio1/10
+siteInfo_ArtsDaten$bio5 <- siteInfo_ArtsDaten$bio5/100  
+siteInfo_ArtsDaten$bio6 <- siteInfo_ArtsDaten$bio6/100    
+siteInfo_ArtsDaten$tree_line <- siteInfo_ArtsDaten$tree_line/100
+siteInfo_ArtsDaten$y <- siteInfo_ArtsDaten$y/1000000
+
+
+bufferData$distCoast <- bufferData$distCoast/10000
+bufferData$elevation <- bufferData$elevation/100  
+bufferData$bio1 <- bufferData$bio1/10
+bufferData$bio5 <- bufferData$bio5/100  
+bufferData$bio6 <- bufferData$bio6/100    
+bufferData$tree_line <- bufferData$tree_line/100
+bufferData$y <- bufferData$y/1000000
 
 #add new variables to the bugs data
-bugs.data$occDM <- model.matrix(~ bufferData$tree_line +
-                                  bufferData$bio1 +
-                                  bufferData$bio1^2 +
+all(bufferData$LinjeID==siteInfo$LinjeID)
+bugs.data$occDM <- model.matrix(~ bufferData$y +
+                                  bufferData$y^2 +#insig
                                   bufferData$bio6 +
-                                  bufferData$Meadows +
-                                  bufferData$OSF +
-                                  bufferData$ODF +
-                                  bufferData$elevation +
-                                  bufferData$Bog +
+                                  bufferData$distCoast +
+                                  bufferData$bio5 +
+                                  bufferData$tree_line +
+                                  bufferData$elevation +#insig
+                                  bufferData$Meadows +#insig
+                                  bufferData$Bog +#insig
                                   bufferData$Forest)[,-1]
-
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 
-# siteInfo_ArtsDaten <- readRDS(paste(myfolder,
-#                                     "siteInfo_ArtsDaten.rds",sep="/"))
-# 
-# environData <- siteInfo_ArtsDaten[,c(12:33)]
-# bugs.data$predDM <- model.matrix(~ environData$tree_line +
-#                                    environData$bio1 +
-#                                    environData$bio5 +
-#                                    environData$elevation + 
-#                                    environData$Bog +
-#                                    environData$Forest)[,-1]
-# 
-# bugs.data$npreds <- nrow(environData)
+
+#predictions to full grid
+bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$y +
+                                  siteInfo_ArtsDaten$y^2 +#insig
+                                  siteInfo_ArtsDaten$bio6 +
+                                  siteInfo_ArtsDaten$distCoast +
+                                  siteInfo_ArtsDaten$bio5 +
+                                  siteInfo_ArtsDaten$tree_line +
+                                  siteInfo_ArtsDaten$elevation +#insig
+                                  siteInfo_ArtsDaten$Meadows +#insig
+                                  siteInfo_ArtsDaten$Bog +#insig
+                                  siteInfo_ArtsDaten$Forest)[,-1]
+bugs.data$n.preds <- dim(bugs.data$predDM)[1]
+ 
 
 ### fit model #################################################
 
@@ -147,7 +177,7 @@ library(jagsUI)
 #params <- c("int.d","line.d.sd","year.d.sd",
 #            "beta","bpv","totalPop","Density","Dens_lt")
 
-params <- c("int.d","beta","meanDensity","meanExpNu","bpv","expNuIndivs")
+params <- c("int.d","beta","meanDensity","meanExpNu","bpv","expNuIndivs","Density")
 
 modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
 
@@ -192,3 +222,18 @@ saveRDS(out1$summary,file="outSummary_linetransectModel_variables.rds")
 
 #v4
 #as V3 except with ESW model
+
+#5
+#as V3 except with random adm effect on the ESW model and state model
+
+#6 
+# bugs.data$occDM <- model.matrix(~ bufferData$y +
+#                                   bufferData$y^2 +
+#                                   bufferData$bio6 +
+#                                   bufferData$distCoast +
+#                                   bufferData$bio5 +
+#                                   bufferData$tree_line +
+#                                   bufferData$elevation +
+#                                   bufferData$Meadows +
+#                                   bufferData$Bog +
+#                                   bufferData$Forest)[,-1]
