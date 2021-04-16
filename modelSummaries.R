@@ -1,5 +1,6 @@
 library(raster)
 library(sp)
+library(sf)
 library(maptools)
 library(rgeos)
 
@@ -36,19 +37,27 @@ siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 ### plot map #################################################
 
-#from full model
-out1 <- readRDS("model-outputs/out_occModel_upscaling.rds")
-print(out1$summary,3)
-siteInfo$preds <- out1$mean$grid.muZ
+out1 <- readRDS("model-outputs/outSummary_occModel_upscaling.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+table(out1$Rhat<1.1)
+
+#Z
+preds <- subset(out1,grepl("grid.z",out1$Param))
+siteInfo$preds <- preds$mean
 mygrid[] <- NA
 mygrid[siteInfo$grid] <- siteInfo$preds
 plot(mygrid)
 
-#from model summary
-out1 <- readRDS("model-outputs/outSummary_occModel_upscaling.rds")
-out1 <- data.frame(out1)
-out1$Param <- row.names(out1)
-preds <- subset(out1,grepl("grid.z",out1$Param))
+# using tmap package
+crs(mygrid) <- equalM
+#tmaptools::palette_explorer()
+library(tmap)
+occ_tmap <- tm_shape(mygrid)+
+  tm_raster(title="Pr(Occupancy)",palette="YlGnBu")
+
+#psi
+preds <- subset(out1,grepl("grid.psi",out1$Param))
 siteInfo$preds <- preds$mean
 mygrid[] <- NA
 mygrid[siteInfo$grid] <- siteInfo$preds
@@ -64,8 +73,8 @@ tm_shape(mygrid)+
 ### plot coefficients #######################################
 
 betas <- subset(out1,grepl("beta",out1$Param))
-betas <- betas[1:8,]
-betas$variables <- c("tree_line_position", "tree_line_position2","bio1","bio1_2", "bio6","elevation","prefopen", "open")
+#betas <- betas[1:8,]
+#betas$variables <- c("tree_line_position", "tree_line_position2","bio1","bio1_2", "bio6","elevation","prefopen", "open")
 
 ggplot(betas)+
   geom_crossbar(aes(x=variables,y=mean,
@@ -108,11 +117,12 @@ for (i in 1:nu_Iteractions){
 }
 
 summary(AUC_psi)
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#0.8677  0.8767  0.8800  0.8799  0.8828  0.8938
 
 #Y against Py 
-
 Py_preds <- subset(ggd2,grepl("Py",ggd2$Parameter))
-Py_preds$Iteration <- as.numeric(factor(paste(Py_pred$Iteration,Py_preds$Chain)))
+Py_preds$Iteration <- as.numeric(factor(paste(Py_preds$Iteration,Py_preds$Chain)))
 nu_Iteractions <- max(Py_preds$Iteration)
 head(Py_preds)
 
@@ -124,7 +134,7 @@ for (i in 1:nu_Iteractions){
   py.vals <- Py_preds$value[Py_preds$Iteration==i]
   
   pred <- ROCR::prediction(py.vals, 
-                           bugs.data$y_test)
+                           bugs.data$y)
   
   #get AUC
   perf <- ROCR::performance(pred, "auc")
@@ -134,61 +144,77 @@ for (i in 1:nu_Iteractions){
 
 summary(AUC_py)
 
+### cross validation #######################################
+
+myfolds <- list.files("model-outputs/occModel_CV") %>%
+            str_subset("fold")
+
+
+temp <- plyr::ldply(1:5,function(x){
+  temp <- readRDS(paste0("model-outputs/occModel_CV/",myfolds[x]))
+  temp$fold.id <- x
+  return(temp)
+})
+  
+    
+temp %>% 
+  group_by(fold.id) %>%
+  summarise(across(everything(),mean))
+# fold.id AUC_psi_test AUC_psi_train AUC_py_test AUC_py_train
+# 1       1        0.932         0.967       0.614        0.960
+# 2       2        0.970         0.962       0.799        0.956
+# 3       3        0.950         0.966       0.590        0.975
+# 4       4        0.974         0.960       0.894        0.947
+# 5       5        0.946         0.965       0.742        0.952
+                
+temp %>% 
+  group_by(fold.id) %>%
+  summarise(across(everything(),mean)) %>%
+  colMeans()
 
 ### DISTANCE models ##########################################
 
 siteInfo <- readRDS("data/siteInfo_LineTransects.rds")
 environData <- readRDS("data/environData.rds")
+bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
+siteInfo_ArtsDaten <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 ### plot map ##############################################
 
 out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
-out1[row.names(out1)=="totalPop",]
 
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
+preds <- subset(out1,grepl("meanDensity",out1$Param))
+bufferData$preds <- preds$mean
+bufferData$predsSD <- preds$sd
+
+#also plot with tmap
+
+bufferData_st <- st_as_sf(bufferData,coords=c("x","y"),crs=equalM)
+
+density_tmap <- tm_shape(NorwayOrigProj)+
+  tm_borders()+
+tm_shape(bufferData_st)+
+  tm_dots("preds",title="Est. Density",palette="YlGnBu",size=0.1)+
+  tm_layout(legend.position=c("left","top"))
+
+tmap_arrange(occ_tmap,density_tmap,nrow=1)
+
+
+#across whole range
 preds <- subset(out1,grepl("Density",out1$Param))
-environData$preds <- preds$mean
-environData$predsSD <- preds$sd
+preds <- subset(preds,!grepl("meanDensity",preds$Param))
+siteInfo_ArtsDaten$preds <- preds$mean
+siteInfo_ArtsDaten$predsSD <- preds$sd
 
+#also plot with tmap
 mygrid[] <- NA
-mygrid[environData$grid] <- environData$preds
-plot(mygrid)
+mygrid[siteInfo_ArtsDaten$grid] <- siteInfo_ArtsDaten$preds
+tm_shape(mygrid)+
+  tm_raster(title="Pred. Density",palette="YlGnBu")
 
-# using tmap package
-crs(mygrid) <- equalM
-#tmaptools::palette_explorer()
-library(tmap)
-tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu",n=10)+
-  tm_layout(legend.position = c("left","top"))
-
-#over range of data
-preds <- subset(out1,grepl("Dens_lt",out1$Param))
-environData$preds <- NA
-environData$preds[environData$surveys==1] <- preds$mean
-summary(environData$preds)
-mygrid[] <- NA
-mygrid[environData$grid] <- environData$preds
-
-tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
-  tm_layout(legend.position = c("left","top"))
-
-#uncertainty
-environData$Uncertain <- environData$preds/environData$predsSD 
-mygrid[] <- NA
-mygrid[environData$grid] <- environData$Uncertain
-plot(mygrid)
-
-# using tmap package
-crs(mygrid) <- equalM
-#tmaptools::palette_explorer()
-library(tmap)
-tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title = "Density uncertainty",
-                              style="pretty")+
-  tm_layout(legend.position = c("left","top"))
+#is it just bad prediction outside of range??
 
 ### plot coefficients #####################################
 
@@ -210,7 +236,7 @@ ggplot(betas)+
 
 #full data model
 
-out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables_v3.rds")
+out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables_v6.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 
@@ -230,17 +256,23 @@ cor.test(log(preds$data),log(preds$mean))
 #v1 - correlation is 0.358
 #v2 - correlation is 0.367
 #v3 - correlation is 0.374
-#BPV
+#v4 - correlation is 0.506
+#v5 - correlation is 0.524
+#v6 - correlation is 0.546
+
+#BPV - still bad???
 hist(out1$mean[out1$Param=="bpv"])
 summary(out1$mean[out1$Param=="bpv"])
 
-#CV fold models
-library(ggmcmc)
+#### cross validation ######################################
 
+#CV fold models
+
+library(ggmcmc)
 #get all files for fold 1
-fold <- 1
+fold <- 4
 #folder <- "null"
-folder <- "environ_only"
+folder <- "environ_v2"
 
 myFiles <- list.files(paste0("model-outputs/linetransectModel_CV/",folder))
 myFolds <- myFiles[grepl(paste0("_",fold,".rds"),myFiles)]
@@ -248,13 +280,11 @@ myFolds <- myFiles[grepl(paste0("_",fold,".rds"),myFiles)]
 #read in main model
 out1 <- readRDS(paste("model-outputs/linetransectModel_CV",folder,myFolds[1],sep="/"))
 ggd <- ggs(out1$samples)
-#we have mid.expNuIndivs_test, 
-#mid.expNuIndivs_train
 
-#get training data
-
+#extraxt training data
 out1_train <- subset(ggd,grepl("mean.expNuIndivs_train",ggd$Parameter))
 out1_train$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_train$Parameter))
+out1_train$siteIndex <- as.numeric(as.character(out1_train$siteIndex))
 out1_train$index <- as.numeric(interaction(out1_train$Iteration,out1_train$Chain))
 
 #get actual NuIndiv
@@ -266,78 +296,66 @@ totalsInfo_mean <- rowMeans(totalsInfo,na.rm=T)
 length(unique(out1_train$siteIndex)) == dim(totalsInfo)[1]
 
 #plot correlation between mean values
-meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=median(value))
+meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=mean(value))
 meanVals$obs <- totalsInfo_mean
-qplot(obs,pred,data=meanVals)#bad:) 
+qplot(log(obs),log(pred),data=meanVals)
+cor.test(log(meanVals$obs),log(meanVals$pred))#0.33
 
 #get difference between this value and the simulated values
 mad_train <- as.numeric()
 rmse_train <- as.numeric()
 n.index <- max(out1_train$index)
+
 for(i in 1:n.index){
-  mad_train[i] <- mean(abs(totalsInfo_year5[!is.na(totalsInfo_year5)] - 
-                       out1_train$value[out1_train$index==i][!is.na(totalsInfo_year5)]))
-  rmse_train[i] <- sqrt(mean((totalsInfo_year5[!is.na(totalsInfo_year5)] - 
-                        out1_train$value[out1_train$index==i][!is.na(totalsInfo_year5)])^2))
+  mad_train[i] <- mean(abs(totalsInfo_mean[!is.na(totalsInfo_mean)] - 
+                       out1_train$value[out1_train$index==i][!is.na(totalsInfo_mean)]))
+  
+  rmse_train[i] <- sqrt(mean((totalsInfo_mean[!is.na(totalsInfo_mean)] - 
+                        out1_train$value[out1_train$index==i][!is.na(totalsInfo_mean)])^2))
+  
 }
 
-summary(mad)
-hist(mad)
-hist(rmse)
-
-#compare the density estimates and the raw density estimates
-out1_train <- subset(ggd,grepl("mean.Density_train",ggd$Parameter))
-out1_train$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_train$Parameter))
-out1_train$index <- as.numeric(interaction(out1_train$Iteration,out1_train$Chain))
-
-#get observed densities
-train_fold <- myFolds[grepl("train",myFolds)]
-totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV/",folder,train_fold,sep="/"))
-densityInfo <- totalsInfo/(transectLengths/1000 * 106/1000 *2)
-densityInfo_mean <- rowMeans(densityInfo,na.rm=T)
-
-#check they are consistent:
-length(unique(out1_train$siteIndex)) == length(densityInfo_mean)
-
-#plot correlation between mean values
-meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=median(value))
-meanVals$obs <- densityInfo_mean
-qplot(obs,pred,data=meanVals) 
+summary(mad_train)
+hist(mad_train)
+hist(rmse_train)
+summary(totalsInfo_mean)
 
 
 #test data
-#get training data
-out1_test <- subset(ggd,grepl("mid.expNuIndivs_test",ggd$Parameter))
+out1_test <- subset(ggd,grepl("mean.expNuIndivs_test",ggd$Parameter))
 out1_test$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_test$Parameter))
+out1_test$siteIndex <- as.numeric(as.character(out1_test$siteIndex))
 out1_test$index <- as.numeric(interaction(out1_test$Iteration,out1_test$Chain))
 
 #get actual NuIndiv
 test_fold <- myFolds[grepl("test",myFolds)]
-totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV",test_fold,sep="/"))
-totalsInfo_year5 <- totalsInfo[,5]
+totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV",folder,test_fold,sep="/"))
+totalsInfo_mean <- rowMeans(totalsInfo,na.rm=T)
 
 #check they are consistent:
 length(unique(out1_test$siteIndex)) == dim(totalsInfo)[1]
 
 #plot correlation between mean values
 meanVals <- plyr::ddply(out1_test,"siteIndex",summarise,pred=median(value))
-meanVals$obs <- totalsInfo_year5
-qplot(obs,pred,data=meanVals)#bad:) 
+meanVals$obs <- totalsInfo_mean
+qplot(log(obs),log(pred),data=meanVals)#bad:) 
+cor.test(log(meanVals$obs),log(meanVals$pred))#0.42!! 
 
 #get difference between this value and the simulated values
 mad_test <- as.numeric()
 rmse_test <- as.numeric()
 n.index <- max(out1_test$index)
 for(i in 1:n.index){
-  mad_test[i] <- mean(abs(totalsInfo_year5[!is.na(totalsInfo_year5)] - 
-                       out1_test$value[out1_test$index==i][!is.na(totalsInfo_year5)]))
-  rmse_test[i] <- sqrt(mean((totalsInfo_year5[!is.na(totalsInfo_year5)] - 
-                          out1_test$value[out1_test$index==i][!is.na(totalsInfo_year5)])^2))
+  mad_test[i] <- mean(abs(totalsInfo_mean[!is.na(totalsInfo_mean)] - 
+                       out1_test$value[out1_test$index==i][!is.na(totalsInfo_mean)]))
+  rmse_test[i] <- sqrt(mean((totalsInfo_mean[!is.na(totalsInfo_mean)] - 
+                          out1_test$value[out1_test$index==i][!is.na(totalsInfo_mean)])^2))
 }
 
 summary(mad_test)
 hist(mad_test)
 hist(rmse_test)
+summary(totalsInfo_mean)
 
 #### COMBINED model #####################################
 
