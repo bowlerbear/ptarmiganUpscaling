@@ -3,6 +3,9 @@ library(sp)
 library(sf)
 library(maptools)
 library(rgeos)
+library(tmap)
+library(ggplot2)
+#tmaptools::palette_explorer()
 
 ### check siteInfo #######################################################
 
@@ -33,8 +36,6 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 ### OCCU models ##############################################
 
-siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
-
 ### plot map #################################################
 
 out1 <- readRDS("model-outputs/outSummary_occModel_upscaling.rds")
@@ -44,29 +45,26 @@ table(out1$Rhat<1.1)
 
 #Z
 preds <- subset(out1,grepl("grid.z",out1$Param))
-siteInfo$preds <- preds$mean
+siteInfo_Occ$preds <- preds$mean
 mygrid[] <- NA
-mygrid[siteInfo$grid] <- siteInfo$preds
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
 plot(mygrid)
 
 # using tmap package
 crs(mygrid) <- equalM
-#tmaptools::palette_explorer()
-library(tmap)
 occ_tmap <- tm_shape(mygrid)+
   tm_raster(title="Pr(Occupancy)",palette="YlGnBu")
+occ_tmap
 
 #psi
 preds <- subset(out1,grepl("grid.psi",out1$Param))
-siteInfo$preds <- preds$mean
+siteInfo_Occ$preds <- preds$mean
 mygrid[] <- NA
-mygrid[siteInfo$grid] <- siteInfo$preds
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
 plot(mygrid)
 
 # using tmap package
 crs(mygrid) <- equalM
-#tmaptools::palette_explorer()
-library(tmap)
 tm_shape(mygrid)+
   tm_raster(title="Occupancy prob",palette="YlGnBu")
 
@@ -85,8 +83,7 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
-
-### auc ######################################################
+### AUC ######################################################
 
 out2 <- readRDS("model-outputs/out_update_occModel_upscaling.rds")
 
@@ -143,12 +140,12 @@ for (i in 1:nu_Iteractions){
 }
 
 summary(AUC_py)
+#doesnt run
 
 ### cross validation #######################################
 
 myfolds <- list.files("model-outputs/occModel_CV") %>%
             str_subset("fold")
-
 
 temp <- plyr::ldply(1:5,function(x){
   temp <- readRDS(paste0("model-outputs/occModel_CV/",myfolds[x]))
@@ -156,7 +153,6 @@ temp <- plyr::ldply(1:5,function(x){
   return(temp)
 })
   
-    
 temp %>% 
   group_by(fold.id) %>%
   summarise(across(everything(),mean))
@@ -174,47 +170,66 @@ temp %>%
 
 ### DISTANCE models ##########################################
 
-siteInfo <- readRDS("data/siteInfo_LineTransects.rds")
-environData <- readRDS("data/environData.rds")
 bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
-siteInfo_ArtsDaten <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 ### plot map ##############################################
 
 out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
-
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
+
+#density over range of line transects
 preds <- subset(out1,grepl("meanDensity",out1$Param))
 bufferData$preds <- preds$mean
 bufferData$predsSD <- preds$sd
 
-#also plot with tmap
-
+#tmap
 bufferData_st <- st_as_sf(bufferData,coords=c("x","y"),crs=equalM)
-
 density_tmap <- tm_shape(NorwayOrigProj)+
   tm_borders()+
 tm_shape(bufferData_st)+
   tm_dots("preds",title="Est. Density",palette="YlGnBu",size=0.1)+
   tm_layout(legend.position=c("left","top"))
 
+#plot side by side with occupancy
 tmap_arrange(occ_tmap,density_tmap,nrow=1)
-
 
 #across whole range
 preds <- subset(out1,grepl("Density",out1$Param))
 preds <- subset(preds,!grepl("meanDensity",preds$Param))
-siteInfo_ArtsDaten$preds <- preds$mean
-siteInfo_ArtsDaten$predsSD <- preds$sd
+siteInfo_Occ$density_preds <- preds$mean
+siteInfo_Occ$density_predsSD <- preds$sd
 
-#also plot with tmap
+#tmap
 mygrid[] <- NA
-mygrid[siteInfo_ArtsDaten$grid] <- siteInfo_ArtsDaten$preds
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$density_preds
 tm_shape(mygrid)+
   tm_raster(title="Pred. Density",palette="YlGnBu")
+#weird!!
 
-#is it just bad prediction outside of range??
+#is it just bad prediction outside of covariate range??
+
+#relationship between occupancy and abundance?
+ggplot(siteInfo_Occ)+
+  geom_point(aes(x=preds,
+                 y=density_preds))
+
+#what does realised density look like?
+siteInfo_Occ$real_density <- siteInfo_Occ$preds * siteInfo_Occ$density_preds
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$real_density
+tm_shape(mygrid)+
+  tm_raster(title="Real. Density",palette="YlGnBu")
+
+#is it just outliers?
+summary(siteInfo_Occ$real_density)
+siteInfo_Occ$real_density[siteInfo_Occ$real_density>400] <- 400
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$real_density
+tm_shape(mygrid)+
+  tm_raster(title="Real. Density",palette="YlGnBu")
+#yes! it was just weird outliers!!
+sum(siteInfo_Occ$real_density)
 
 ### plot coefficients #####################################
 
@@ -230,13 +245,11 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
-
-
 ### predictive fits #################
 
 #full data model
 
-out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables_v6.rds")
+out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 
@@ -365,45 +378,3 @@ out1[row.names(out1)=="totalAbund",]
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("realAbund",out1$Param))
-environData$preds <- preds$mean
-environData$predsSD <- preds$sd
-
-mygrid[] <- NA
-mygrid[environData$grid] <- environData$preds
-plot(mygrid)
-
-# using tmap package
-crs(mygrid) <- equalM
-#tmaptools::palette_explorer()
-library(tmap)
-tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu",n=10)+
-  tm_layout(legend.position = c("left","top"))
-
-#over range of data
-preds <- subset(out1,grepl("Dens_lt",out1$Param))
-environData$preds <- NA
-environData$preds[environData$surveys==1] <- preds$mean
-summary(environData$preds)
-mygrid[] <- NA
-mygrid[environData$grid] <- environData$preds
-
-tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title="Density",palette="YlGnBu")+
-  tm_layout(legend.position = c("left","top"))
-
-#uncertainty
-environData$predsSD <- preds$mean/preds$sd
-mygrid[] <- NA
-mygrid[environData$grid] <- environData$predsSD
-plot(mygrid)
-
-# using tmap package
-crs(mygrid) <- equalM
-#tmaptools::palette_explorer()
-library(tmap)
-tm_shape(NorwayOrigProj)+tm_polygons(col="white")+
-  tm_shape(mygrid)+ tm_raster(title = "Density uncertainty")+
-  tm_layout(legend.position = c("left","top"))
-
-### end #################################################
