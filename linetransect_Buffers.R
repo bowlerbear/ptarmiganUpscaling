@@ -379,6 +379,7 @@ ggpairs(varDF[,c(2:14,23:25)])
 #correlations >0.7
 #bio1 vs bio6
 #x vs y
+#choose bio6 for line transects
 
 ### save #############################################################################
 
