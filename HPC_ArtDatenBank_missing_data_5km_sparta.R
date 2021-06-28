@@ -4,10 +4,11 @@ library(rgeos)
 library(raster)
 library(maptools)
 
-#HPC
-myfolder <- "/data/idiv_ess/ptarmiganUpscaling" 
 #local
 #myfolder <- "data"
+
+#HPC
+myfolder <- "/data/idiv_ess/ptarmiganUpscaling" 
 
 ### get norway##############################################################
 
@@ -102,7 +103,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   #add an adm effect
                   adm = siteInfo$admN,
                   det.adm = listlengthDF$admN,
-                  det.open = scale(listlengthDF$Open),
+                  det.open = listlengthDF$Open,
                   n.adm = length(unique(siteInfo$admN)),#19
                   adm2 = siteInfo$admN2,
                   det.adm2 = listlengthDF$admN2,
@@ -116,7 +117,7 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
 #3 = intermediate alpine zone, 
 #4 = high alpine zone 
 
-### initials ####################################################################
+### initials ################################################
 
 #get JAGS libraries
 library(rjags)
@@ -130,36 +131,108 @@ inits <- function(){list(z = zst)}
 
 #saveRDS(zst,file="data/zst_ArtsDaten.rds")
 
-### choose covariates ##########################################################
+
+### bpv index ##############################################
+
+#for each i, sum into t
+StrIdx <- array(data=0, dim = c(bugs.data$nvisit,bugs.data$nyear))
+for(i in 1:bugs.data$nvisit){
+  StrIdx[i,bugs.data$year[i]] <- 1
+}
+bugs.data$StrIdx <- StrIdx
+
+### scale variables ##########################################
 
 #total grids
 nrow(varDF)#11788
 #sampled grid
 nrow(siteInfo)#11788
 
-#specify model structure
-bugs.data$occDM <- model.matrix(~ scale(siteInfo$tree_line_position) + 
-                                  scale(siteInfo$tree_line_position^2) +
-                                  scale(siteInfo$elevation) +
-                                  scale(siteInfo$y) +
-                                  scale(siteInfo$distCoast) +
-                                  scale(siteInfo$bio5) +
-                                  scale(siteInfo$bio6) +
-                                  scale(siteInfo$Bog) +
-                                  scale(siteInfo$ODF) +
-                                  scale(siteInfo$Meadows) +
-                                  scale(siteInfo$MountainBirchForest))[,-1]
+siteInfo[,-c(1:11)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:11)])
+
+### choose model ##############################################
+
+modelTaskID <- read.delim(paste(myfolder,"modelTaskID_occuModel.txt",sep="/"),as.is=T)
+
+#get task id
+task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
+
+#get model for this task
+mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
+
+### choose covariates ##########################################################
+
+#standard model
+if(mymodel == "BUGS_occuModel_upscaling.txt"){
+  
+#specify model structure - a priori picking variables
+bugs.data$occDM <- model.matrix(~ siteInfo$tree_line_position +
+                                   I(siteInfo$tree_line_position^2) +
+                                   siteInfo$y +
+                                   siteInfo$bio1 +
+                                   I(siteInfo$bio1^2) +
+                                   siteInfo$Bog +
+                                   siteInfo$Meadows +
+                                   siteInfo$ODF +
+                                   siteInfo$OSF +
+                                   siteInfo$MountainBirchForest)[,-1]
+#saveRDS(bugs.data,file="data/bugs.data_ArtsDaten.rds")
+
+#lasso model or model selection model
+}else{
+  
+bugs.data$occDM <- model.matrix(~ siteInfo$bio6 +
+                                   siteInfo$bio5 +
+                                   siteInfo$tree_line_position +
+                                   siteInfo$MountainBirchForest +
+                                   siteInfo$Bog +
+                                   siteInfo$ODF + 
+                                   siteInfo$Meadows +
+                                   siteInfo$OSF +
+                                   siteInfo$Mire +
+                                   siteInfo$SnowBeds +
+                                   siteInfo$y +
+                                   siteInfo$distCoast +
+                                   I(siteInfo$bio6^2) +
+                                   I(siteInfo$bio5^2) +
+                                   I(siteInfo$tree_line_position^2) +
+                                   I(siteInfo$MountainBirchForest^2) +
+                                   I(siteInfo$Bog^2) +
+                                   I(siteInfo$ODF^2) + 
+                                   I(siteInfo$Meadows^2) +
+                                   I(siteInfo$OSF^2) +
+                                   I(siteInfo$Mire^2) +
+                                   I(siteInfo$SnowBeds^2) +
+                                   I(siteInfo$y^2) +
+                                   I(siteInfo$distCoast^2))[,-1]
+
+}
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
-#saveRDS(bugs.data,file="data/bugs.data_ArtsDaten.rds")
+
+# myvars <- c("bio6","bio5","tree_line_position","MountainBirchForest","Bog","ODF","Meadows",
+#             "OSF","Mire","SnowBeds","y","distCoast",
+#             "bio6_2","bio5_2","tree_line_position_2",
+#             "MountainBirchForest_2","Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2",
+#             "SnowBeds_2","y_2","distCoast_2")
+# myvars <- c("tree_line_position","tree_line_position_2","geo_y","bio1","bio1_2","Bog",
+#             "Meadows","ODF","OSF","MountainBirchForest")
+
 
 ### fit model ########################################################
 
-params <- c("mean.p","beta","beta.effort","beta.det.open","grid.z","grid.psi")
+params <- c("mean.p","beta","g","beta.effort",
+            "beta.det.open","grid.z","grid.psi")
 
-modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
+#chosen already earlier
+#modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
+#modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling_ModelSelection.txt"
+#modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling_LASSO.txt"
+modelfile <- paste(myfolder,mymodel,sep="/")
 
-n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
+#n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
+n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
+#n.cores = 3
 
 n.iterations = 20000
 
@@ -173,11 +246,12 @@ out1 <- jags(bugs.data,
              n.iter = n.iterations,
              parallel = T)
 
-saveRDS(out1$summary,file="outSummary_occModel_upscaling.rds")
+saveRDS(out1$summary,file=paste0("outSummary_occModel_upscaling_",task.id,".rds"))
 
 #update by a small number and get full model
-out2 <- update(out1,
-               parameters.to.save = c("mid.z","mid.psi","Py"),
-               n.iter = 1000)
+out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py",
+                                            "e.count","sim.count",
+                                            "fit","fit.new"),n.iter=1000)
 
-saveRDS(out2,file="out_update_occModel_upscaling.rds")
+saveRDS(out2,file=paste0("out_update_occModel_upscaling_",task.id,".rds"))
+
