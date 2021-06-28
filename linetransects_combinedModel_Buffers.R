@@ -4,8 +4,9 @@ library(sp)
 library(rgeos)
 library(raster)
 library(maptools)
+library(tmap)
 
-source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R', encoding = 'UTF-8')
+source('generalFunctions.R', encoding = 'UTF-8')
 
 #specify top level folder
 myfolder <- "Data" #on local PC
@@ -65,14 +66,17 @@ sum(tlDF$length==0)#1302
 
 #get mean across all years
 siteMeans <- tlDF %>%
+  mutate(density = totalsInfo/(length/1000 * 106/1000 * 2)) %>%
   group_by(LinjeID) %>%
   summarise(meanNu = mean(totalsInfo,na.rm=T),
-            meanTL = mean(length[length!=0])) %>%
+            meanTL = mean(length[length!=0]),
+            meanDensity = mean(density,na.rm=T)) %>%
   filter(!is.na(meanNu)) %>%
   filter(!is.infinite(meanNu))
+summary(siteMeans)
+
 
 bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
-
 siteMeans <- merge(siteMeans,bufferData,by="LinjeID")
 siteMeans <- subset(siteMeans,!is.na(tree_line))
 
@@ -83,12 +87,11 @@ table(siteMeans$adm)
 
 Polys_spatial <- readRDS("data/Polys_spatial.rds")
 Polys_spatial <- merge(Polys_spatial,siteMeans,by="LinjeID")
-Polys_spatial <- subset(Polys_spatial,!is.na(meanNu))
-Polys_spatial$meanDensity <- Polys_spatial$meanNu/Polys_spatial$meanTL
+Polys_spatial <- subset(Polys_spatial,!is.na(meanDensity))
+Polys_spatial$meanDensity[Polys_spatial$meanDensity > 25] <- 25
 head(Polys_spatial)
 summary(Polys_spatial)
 
-library(tmap)
 tm_shape(NorwayOrig) +
   tm_borders()+
 tm_shape(Polys_spatial)+
@@ -96,56 +99,126 @@ tm_shape(Polys_spatial)+
 
 tm_shape(NorwayOrig) +
   tm_fill("grey")+
-  tm_shape(Polys_spatial)+
+tm_shape(Polys_spatial)+
   tm_fill(col="meanDensity",style="pretty",n=7)+
   tm_legend(legend.position=c("left","top"))
 
 ### glm model ######################################################
 
-hist(siteMeans$meanNu)
-summary(siteMeans$meanNu)
-hist(log(siteMeans$meanNu+1))
+hist(siteMeans$meanDensity)
+summary(siteMeans$meanDensity)
+hist(log(siteMeans$meanDensity+1))
 
-glm1 <- lm(log(meanNu+1) ~ scale(bio5) + scale(bio6) + 
-            Forest + Bog + ODF + OSF + Mire + SnowBeds + Human + 
-            scale(y) +
-            scale(distCoast) +
-            scale(tree_line) + 
-            scale(elevation),
-            offset=log(meanTL),
-            data=siteMeans)
-summary(glm1)
+glm1 <- lm(log(meanDensity+1) ~ scale(bio5) + scale(bio6) + 
+             Forest + Bog + ODF + OSF + Mire + SnowBeds + Human + 
+             scale(y) +
+             scale(distCoast) +
+             scale(tree_line) + 
+             scale(elevation),
+           data=siteMeans)
+summary(glm1)#21%
+
+#bio5 has negative effect
+#bio6 has positive effect
+#distCoast has negative effect
 
 library(MuMIn)
 options(na.action = "na.fail")
 dd <- dredge(glm1)
 subset(dd, delta < 2)
-#bog, forest, mire, ODF, OSF,bio5, bio6, distCoast,treeline, y
+#bog, forest, mire, ODF, OSF,bio5, bio6, distCoast,treeline, y, snowbeds
+
+#check variance inflation
+
+glm1 <- lm(log(meanDensity+0.01) ~ 
+             scale(bio5) + 
+             scale(bio6) + 
+             Forest + 
+             Bog + 
+             SnowBeds +
+             Meadows + 
+             scale(y) +
+             scale(distCoast) +
+             scale(tree_line) + 
+             scale(elevation),
+           data=siteMeans)
+summary(glm1)#only 20%
+car::vif(glm1)
+#tree line, elevation and y
+
+pairs(siteMeans[,c("y","distCoast","tree_line","elevation","tree_line_position")])
+#tree line and elevation are highly correlated
+#y and elevation are also correlated
+
+ggplot(siteMeans,aes(y=log(meanDensity+1),
+                     x=y))+
+  geom_point()+stat_smooth()
+#quadratic should be fine
+
+ggplot(siteMeans,aes(y=log(meanDensity+1),
+                     x=distCoast))+
+  geom_point()+stat_smooth()
+#nothing obvious
+
+ggplot(siteMeans,aes(y=log(meanDensity+1),
+                     x=tree_line))+
+  geom_point()+stat_smooth()
+#increase, but humped
+
+ggplot(siteMeans,aes(y=log(meanDensity+1),
+                     x=tree_line_position))+
+  geom_point()+stat_smooth()
+#nothing obvious
+
+ggplot(siteMeans,aes(y=log(meanDensity+1),
+                     x=elevation))+
+  geom_point()+stat_smooth()
+#general increase - humped
+
+#look at partial plots
+
+glm1 <- lm(log(meanDensity+0.01) ~ 
+             scale(bio5) + 
+             scale(bio6) + 
+             Forest + 
+             Bog + 
+             SnowBeds +
+             Meadows + 
+             scale(y) +
+             scale(distCoast) +
+             scale(tree_line),
+           data=siteMeans)
+car::avPlots(glm1)
 
 ### brt #########################################################################
 
 #Boosted regression tree
 library(dismo)
 library(gbm)
-
-siteMeans$meanNu <- log(siteMeans$meanNu/siteMeans$meanTL+1)
+siteMeans$log.Density <- log(siteMeans$meanDensity+0.01)
 
 brt1 <- gbm.step(data=siteMeans, 
-                 gbm.x = c(4:16,18:20,26,27), 
-                 gbm.y = 2,
+                 gbm.x = c(5:17,20,26:28), 
+                 gbm.y = 29,
                  family = 'gaussian')
 
 summary(brt1)
 #                                     var    rel.inf
-# y                                     y 26.2817454#nonlinear
-# bio6                               bio6 17.2973079
-# distCoast                     distCoast 12.2791788
-# bio5                               bio5 11.5308334
-# tree_line                     tree_line  8.5324660
-# elevation                     elevation  4.1847467
-# Bog                                 Bog  3.7565941
-# Meadows                         Meadows  3.0434379
-# Forest                           Forest  2.4127264
+# bio6                               bio6 22.3458169
+# bio5                               bio5 14.2431986
+# y                                     y 11.7659117
+# x                                     x  9.9893607
+# distCoast                     distCoast  9.9046832#non linear effect maybe
+# tree_line                     tree_line  6.8581819
+# Open                               Open  3.8421042
+# bio1                               bio1  2.8542700
+# MountainBirchForest MountainBirchForest  2.7410876
+# Mire                               Mire  2.6665185
+# OSF                                 OSF  2.6246154
+# Forest                           Forest  2.4941139
+# Meadows                         Meadows  2.1145808
+# SnowBeds                       SnowBeds  1.9913050
+# Bog                                 Bog  1.8380248
 
 #plot main effects
 gbm.plot(brt1, n.plots=12, write.title = TRUE)
@@ -155,4 +228,30 @@ find.int <- gbm.interactions(brt1)
 find.int$interactions#none!
 find.int$rank.list
 
+#check similar glm
+glm1 <- lm(log(meanDensity+0.01) ~ bio6 + y + bio5 + distCoast + tree_line+
+             Open+bio1 + Mire + Forest + MountainBirchForest + Meadows + OSF +
+             SnowBeds + Bog,data=siteMeans)
+summary(glm1)#21%...
+
+#### gam model #########################################################
+
+library(mgcv)
+
+gam1 <- gam(log(meanDensity+0.01) ~ s(bio6,k=3) + s(y,k=3) + s(bio5,k=3) + s(distCoast,k=3) + s(tree_line,k=3),data=siteMeans)
+summary(gam1)#25%
+plot(gam1)
+
+#### quadratic model ##################################################
+
+glm1 <- lm(log(meanDensity+0.01) ~ bio6 + I(bio6^2)+
+                                  distCoast + I(distCoast^2)+
+                                  bio5 + I(bio5^2)+
+                                  tree_line + I(tree_line^2)+
+                                  SnowBeds + 
+                                  y +
+                                  OSF,data=siteMeans)
+summary(glm1)#26%
+
 ### end ################################################################
+
