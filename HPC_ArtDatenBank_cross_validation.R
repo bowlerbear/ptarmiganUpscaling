@@ -74,7 +74,7 @@ siteInfo <- arrange(siteInfo,grid)
 
 ### folds #############################################################
 
-folds <- readRDS(paste(myfolder,"folds_occModel.rds",sep="/"))
+folds <- readRDS(paste(myfolder,"folds_occModel_bands.rds",sep="/"))
 listlengthDF$fold <- folds$fold[match(listlengthDF$grid,folds$grid)]
 table(listlengthDF$fold)
 
@@ -157,27 +157,25 @@ siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
 #specify model structure
 bugs.data$occDM_train <- model.matrix(~ scale(siteInfo_train$tree_line_position) + 
                                   scale(siteInfo_train$tree_line_position^2) +
-                                  scale(siteInfo_train$elevation) +
                                   scale(siteInfo_train$y) +
-                                  scale(siteInfo_train$distCoast) +
-                                  scale(siteInfo_train$bio5) +
-                                  scale(siteInfo_train$bio6) +
+                                  scale(siteInfo_train$bio1) +
+                                  scale(siteInfo_train$bio1^2) +
                                   scale(siteInfo_train$Bog) +
-                                  scale(siteInfo_train$ODF) +
                                   scale(siteInfo_train$Meadows) +
+                                  scale(siteInfo_train$ODF) +
+                                  scale(siteInfo_train$OSF) +
                                   scale(siteInfo_train$MountainBirchForest))[,-1]
 
 bugs.data$occDM_test <- model.matrix(~ scale(siteInfo_test$tree_line_position) + 
-                                  scale(siteInfo_test$tree_line_position^2) +
-                                  scale(siteInfo_test$elevation) +
-                                  scale(siteInfo_test$y) +
-                                  scale(siteInfo_test$distCoast) +
-                                  scale(siteInfo_test$bio5) +
-                                  scale(siteInfo_test$bio6) +
-                                  scale(siteInfo_test$Bog) +
-                                  scale(siteInfo_test$ODF) +
-                                  scale(siteInfo_test$Meadows) +
-                                  scale(siteInfo_test$MountainBirchForest))[,-1]
+                                        scale(siteInfo_test$tree_line_position^2) +
+                                        scale(siteInfo_test$y) +
+                                        scale(siteInfo_test$bio1) +
+                                        scale(siteInfo_test$bio1^2) +
+                                        scale(siteInfo_test$Bog) +
+                                        scale(siteInfo_test$Meadows) +
+                                        scale(siteInfo_test$ODF) +
+                                        scale(siteInfo_test$OSF) +
+                                        scale(siteInfo_test$MountainBirchForest))[,-1]
 
 bugs.data$n.covs <- ncol(bugs.data$occDM_test)
 
