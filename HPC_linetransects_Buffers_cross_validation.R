@@ -59,7 +59,7 @@ siteInfo$admN <- as.numeric(as.factor(siteInfo$adm))
 
 ### folds ########################################################
 
-folds <- readRDS(paste(myfolder,"folds_distanceModel.rds",sep="/"))
+folds <- readRDS(paste(myfolder,"folds_distanceModel_bands.rds",sep="/"))
 siteInfo$fold <- folds$fold[match(siteInfo$LinjeID,folds$LinjeID)]
 
 #select fold of this task
@@ -129,40 +129,120 @@ bugs.data <- list(#For the state model
 
 names(bugs.data)
 
-### get environ data #########################################
+### choose model ##############################################
 
-#scale it 
+modelTaskID <- read.delim(paste(myfolder,"modelTaskID_distanceModel_CV.txt",sep="/"),as.is=T)
+
+#get task id
+task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
+
+#get model for this task
+mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
+
+### scale vars ################################################
+
 bufferData[,-1] <- plyr::numcolwise(scale)(bufferData[,-1])
 
 #train dataset
 bufferData_train <- subset(bufferData,LinjeID %in% siteInfo_train$LinjeID)
 all(siteInfo_train$LinjeID==bufferData_train$LinjeID)
 
-#add new variables to the bugs data
-bugs.data$occDM_train <- model.matrix(~ bufferData_train$tree_line +
-                                  bufferData_train$bio1 +
-                                  bufferData_train$bio1^2 +
-                                  bufferData_train$bio6 +
-                                  bufferData_train$Meadows +   
-                                  bufferData_train$elevation +
-                                  bufferData_train$Bog+
-                                  bufferData_train$Forest)[,-1]
-
-bugs.data$n.covs <- ncol(bugs.data$occDM)
-
 #test dataset
 bufferData_test <- subset(bufferData,LinjeID %in% siteInfo_test$LinjeID)
 all(siteInfo_test$LinjeID==bufferData_test$LinjeID)
 
+
+### standard model  ###########################################
+
+#variables selected based on first simple analyses
+
+if(mymodel == "linetransectModel_variables_CV.txt"){
+  
 #add new variables to the bugs data
-bugs.data$occDM_test <- model.matrix(~ bufferData_test$tree_line +
-                                        bufferData_test$bio1 +
-                                        bufferData_test$bio1^2 +
-                                        bufferData_test$bio6 +
-                                        bufferData_test$Meadows +
-                                        bufferData_test$elevation +
-                                        bufferData_test$Bog +
-                                        bufferData_test$Forest)[,-1]
+bugs.data$occDM_train <- model.matrix(~ bufferData_train$y +
+                                    bufferData_train$bio6 +
+                                    I(bufferData_train$bio6^2) +
+                                    bufferData_train$distCoast +
+                                    I(bufferData_train$distCoast^2) +
+                                    bufferData_train$bio5 +
+                                    I(bufferData_train$bio5^2) +
+                                    bufferData_train$tree_line +
+                                    I(bufferData_train$tree_line^2) +
+                                    bufferData_train$OSF +
+                                    bufferData_train$SnowBeds)[,-1]
+  
+#predictions to full grid
+bugs.data$occDM_test <- model.matrix(~ bufferData_test$y +
+                                     bufferData_test$bio6 +
+                                     I(bufferData_test$bio6^2) +
+                                     bufferData_test$distCoast +
+                                     I(bufferData_test$distCoast^2) +
+                                     bufferData_test$bio5 +
+                                     I(bufferData_test$bio5^2) +
+                                     bufferData_test$tree_line +
+                                     I(bufferData_test$tree_line^2) +
+                                     bufferData_test$OSF +
+                                     bufferData_test$SnowBeds)[,-1]
+  
+### indicator model selection ################################
+#or lasso
+#all linear and select quadratic
+
+} else { 
+  
+  bugs.data$occDM_train <- model.matrix(~ bufferData_train$bio6 +
+                                    bufferData_train$bio5 +
+                                    bufferData_train$y +
+                                    bufferData_train$distCoast +
+                                    bufferData_train$tree_line +
+                                    bufferData_train$MountainBirchForest +
+                                    bufferData_train$Bog +
+                                    bufferData_train$ODF +
+                                    bufferData_train$Meadows +
+                                    bufferData_train$OSF +
+                                    bufferData_train$Mire +
+                                    bufferData_train$SnowBeds +
+                                    I(bufferData_train$bio6^2) +
+                                    I(bufferData_train$bio5^2) +
+                                    I(bufferData_train$y^2) +
+                                    I(bufferData_train$distCoast^2) +
+                                    I(bufferData_train$tree_line^2) +
+                                    I(bufferData_train$MountainBirchForest^2) +
+                                    I(bufferData_train$Bog^2) +
+                                    I(bufferData_train$ODF^2) +
+                                    I(bufferData_train$Meadows^2) +
+                                    I(bufferData_train$OSF^2) +
+                                    I(bufferData_train$Mire^2) +
+                                    I(bufferData_train$SnowBeds^2))[,-1]
+  
+  # #predictions to full grid
+  bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
+                                     bufferData_test$bio5 +
+                                     bufferData_test$y +
+                                     bufferData_test$distCoast +
+                                     bufferData_test$tree_line +
+                                     bufferData_test$MountainBirchForest +
+                                     bufferData_test$Bog +
+                                     bufferData_test$ODF +
+                                     bufferData_test$Meadows +
+                                     bufferData_test$OSF +
+                                     bufferData_test$Mire +
+                                     bufferData_test$SnowBeds +
+                                     I(bufferData_test$bio6^2) +
+                                     I(bufferData_test$bio5^2) +
+                                     I(bufferData_test$y^2) +
+                                     I(bufferData_test$distCoast^2) +
+                                     I(bufferData_test$tree_line^2) +
+                                     I(bufferData_test$MountainBirchForest^2) +
+                                     I(bufferData_test$Bog^2) +
+                                     I(bufferData_test$ODF^2) +
+                                     I(bufferData_test$Meadows^2) +
+                                     I(bufferData_test$OSF^2) +
+                                     I(bufferData_test$Mire^2) +
+                                     I(bufferData_test$SnowBeds^2))[,-1]
+} 
+
+bugs.data$n.covs <- ncol(bugs.data$occDM_train)
 
 ### fit model #################################################
 
@@ -171,24 +251,22 @@ library(jagsUI)
 
 params <- c("int.d","line.d.sd","year.d.sd","beta")
 
-modelfile <- paste(myfolder,"linetransectModel_variables_CV.txt",sep="/")
-
-#add adm to model eventually
+modelfile <- paste(myfolder,mymodel,sep="/")
 
 n.iterations <- 40000
+n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1")) 
 
 out1 <- jags(bugs.data, 
              inits=NULL, 
              params, 
              modelfile, 
              n.thin=10,
-             n.chains=3, 
+             n.chains=n.cores, 
              n.burnin=n.iterations/2,
              n.iter=n.iterations,
              parallel=T)
 
-saveRDS(out1$summary,file="outSummary_linetransectModel_CV.rds")
-
+#saveRDS(out1$summary,file="outSummary_linetransectModel_CV.rds")
 
 #update to extract cross validation comparisons
 out2 <- update(out1,
