@@ -546,4 +546,19 @@ varDF <- merge(varDF, dist[,c(1:3,5)], by="grid", all.x=T)
 
 saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
-### end #############################################################################
+### correlations ############################################
+
+library(GGally)
+ggpairs(varDF[,c(2:13,20:22,28:30)])
+cor(varDF[,c(2:13,20:22,28:30)])
+
+#cors >0.7
+#bio1 and bio6
+#bio1 and tree line position
+#forest and open
+#osf and open
+#open and tree line position
+#y and tree line (0.76)
+#y and x 
+
+### end #####################################################
