@@ -9,7 +9,7 @@
     
     # priors for fixed effect parms for half-normal detection parm sigma
     b.df.0 ~ dunif(0,20)        
-    b.group.size ~ dnorm(0,0.01) # standard deviation of 10
+    b.group.size ~ dnorm(0,0.01)
     
     #adm random effect on detection
     for(i in 1:nadm){
@@ -74,18 +74,37 @@
       random.d.year[t] ~ dnorm(0,year.d.tau)
     }
 
-
-    #covariate effects
-    for(i in 1:n.covs){
-      beta[i] ~ dnorm(0,0.01)
+    #from Rushing et al.
+    ## Priors for linear indicator variables -- prob = 1 if quadratic term in model, 0.5 otherwise
+    for(i in 1:12){
+      g[i] ~ dbern(0.5)
     }
-
-
+    
+    ## Priors for quadratic indicator variables - prob = 0.5
+    for(i in 13:24){
+      g[i] ~ dbern(g[i - 12] * 0.5)
+    }
+    
+    ## Priors for betas 
+    
+    for(i in 1:24){ # need to change?
+      #https://gist.github.com/oliviergimenez/8cffedd2defc32a6811d7e715b898d6a
+      #simple approach
+      betaT[i] ~ dnorm(0,0.01)
+      beta[i] <- g[i] * betaT[i]
+    
+      #bit more complex
+      #https://stackoverflow.com/questions/47758236/ssvs-and-spike-slab-prior-with-jags
+      #beta[i] ~ dnorm(0,beta.tau[i])
+      #beta.tau[i] <-(100*(1-g[i]))+(0.001*(g[i]))    #when gamma is 0, tau is 100 (sd = ), 
+                                                  #when gamma is 1, 0.001 (sd = )  
+    }
+    
     #Observation model:
     r ~ dunif(0,50)
     for(j in 1:nsite){
       for(t in 1:nyear){
-      
+        
         NuIndivs[j,t] ~ dnegbin(p[j,t],r)
         
         p[j,t] <- r/(r+expNuIndivs[j,t])
@@ -127,9 +146,7 @@
       log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) + random.d.adm[pred.adm[j]]  
       Density[j] <- Density.km[j]*25 # since there are 25 km per grid
     }
-
-    #totalPop <- sum(Density)
-
+    
     #calculate the Bayesian p-value
     e <- 0.0001
     
@@ -160,6 +177,7 @@
     
     fit <- sum(fit.t[])
     fit.new <- sum(fit.new.t[])
-    
+    #totalPop <- sum(Density)
+
     }
     

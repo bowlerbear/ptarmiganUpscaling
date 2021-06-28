@@ -70,9 +70,24 @@
       random.d.year[t] ~ dnorm(0,year.d.tau)
     }
 
-    #covariate effects
-    for(i in 1:n.covs){
-      beta[i] ~ dnorm(0,0.01)
+    #from Rushing et al.
+    ## Priors for linear indicator variables -- prob = 1 if quadratic term in model, 0.5 otherwise
+    for(i in 1:12){
+      g[i] ~ dbern(0.5)
+    }
+    
+    ## Priors for quadratic indicator variables - prob = 0.5
+    for(i in 13:24){
+      g[i] ~ dbern(g[i - 12] * 0.5)
+    }
+    
+    ## Priors for betas 
+    
+    for(i in 1:24){ # need to change?
+      #https://gist.github.com/oliviergimenez/8cffedd2defc32a6811d7e715b898d6a
+      #simple approach
+      betaT[i] ~ dnorm(0,0.01)
+      beta[i] <- g[i] * betaT[i]
     }
 
     #Observation model:

@@ -70,10 +70,12 @@
       random.d.year[t] ~ dnorm(0,year.d.tau)
     }
 
-    #covariate effects
+    #covariate effects - L1 regularization == a Laplace (double exponential) prior 
+    #https://stats.stackexchange.com/questions/28609/regularized-bayesian-logistic-regression-in-jags
     for(i in 1:n.covs){
-      beta[i] ~ dnorm(0,0.01)
+      beta[i] ~ ddexp(0, dd.tau)
     }
+    dd.tau ~ dgamma(0.01, 0.01)
 
     #Observation model:
     r ~ dunif(0,50)
