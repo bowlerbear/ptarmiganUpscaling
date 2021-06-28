@@ -83,7 +83,7 @@ siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data
 #make each variable column a grid
-myVars <- names(siteInfo)[c(12:24,30:36)]
+myVars <- names(siteInfo)[c(12:24,30:36,39:40)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -96,15 +96,10 @@ awt<- raster::brick(myRasters)
 projection(awt) <- equalM
 plot(awt)
 
-# import presence-absence species data
-speciesSummary <- ddply(siteInfo,.(grid,siteIndex),summarise,PA=max(y,na.rm=T))
-speciesSummary$PA[is.infinite(speciesSummary$PA)] <- 0
-siteInfo$species <- speciesSummary$PA[match(siteInfo$grid,speciesSummary$grid)]
-siteInfo <- merge(siteInfo,myGridDF,by.x="grid",by.y="layer")
-
 # make a SpatialPointsDataFrame object from data.frame
-PA <- siteInfo[!is.na(siteInfo$species),c("x","y.y","species")]
-pa_data <- st_as_sf(PA, coords = c("x", "y.y"), crs = st_crs(awt,asText=TRUE))
+PA <- siteInfo[,c("x","y","species")]
+PA$species[is.na(PA$species)] <- 0
+pa_data <- st_as_sf(PA, coords = c("x", "y"), crs = st_crs(awt,asText=TRUE))
 # see the first few rows
 pa_data
 st_crs(pa_data)==st_crs(awt)
@@ -120,27 +115,35 @@ plot(pa_data)
 sb <- spatialBlock(speciesData = pa_data,
                    species = "species",
                    rasterLayer = awt,
-                   theRange = 150000, # size of the blocks
+                   theRange = 75000, # 150 km works 
                    k = 5,
                    selection = "random")
 
-sb2 <- spatialBlock(speciesData = pa_data, 
+sb <- spatialBlock(speciesData = pa_data, 
                     species = "species",
                     rasterLayer = awt,
-                    rows = 10,
-                    cols = 10,
+                    rows = 25,
+                    cols = 1,
                     k = 5,
                     selection = "systematic")
 
-# environmental clustering
 
-eb <- envBlock(rasterLayer = awt,
-               speciesData = pa_data,
-               species = "species",
-               k = 5,
-               standardization = "standard", # rescale variables between 0 and 1
-               rasterBlock = TRUE,
-               numLimit = 50)
+# buffering with presence-absence data
+#sb <- buffering(speciesData= pa_data,
+#                 species= "species",
+#                 theRange= 70000,
+#                 spDataType = "PA",
+#                 progress = TRUE)
+
+# # environmental clustering
+# 
+# eb <- envBlock(rasterLayer = awt,
+#                speciesData = pa_data,
+#                species = "species",
+#                k = 5,
+#                standardization = "standard", # rescale variables between 0 and 1
+#                rasterBlock = TRUE,
+#                numLimit = 50)
 
 sac <- spatialAutoRange(rasterLayer = awt,
                         sampleNumber = 5000,
@@ -160,7 +163,7 @@ rangeExplorer(rasterLayer = awt) # the only mandatory input
 # add species data to add them on the map
 rangeExplorer(rasterLayer = awt,
               speciesData = pa_data,
-              species = "Species",
+              species = "species",
               rangeTable = NULL,
               minRange = 30000, # limit the search domain
               maxRange = 100000)
@@ -174,9 +177,17 @@ length(folds)
 
 #plot the folds
 siteInfo$folds <- sb$foldID
-qplot(x, y.y, data=siteInfo, colour=factor(folds))
+ggplot2::qplot(x, y, data=siteInfo, colour=factor(folds))
+
+#random
 saveRDS(siteInfo[,c("grid","siteIndex","folds")],
         file="data/folds_occModel.rds")
+
+#systematic bands
+saveRDS(siteInfo[,c("grid","siteIndex","folds")],
+        file="data/folds_occModel_bands.rds")
+
+#how many are in each fold
 
 #### for distance model ####
 
@@ -185,7 +196,7 @@ library(blockCV)
 siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data for whole country
-myVars <- names(siteInfo)[c(12:24,30:32,38)]
+myVars <- names(siteInfo)[c(12:24,30:36,39:40)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -199,9 +210,7 @@ projection(awt) <- equalM
 plot(awt)
 
 # get transect data
-siteInfo <- readRDS("data/siteInfo_linetransects.rds")
-mapping <- readRDS("data/lines_to_grids.rds")
-siteInfo <- merge(siteInfo,mapping,by="LinjeID")
+siteInfo <- readRDS("data/lines_to_grids.rds")
 
 # import presence-absence species data
 pa_data <- siteInfo
@@ -222,6 +231,15 @@ sb <- spatialBlock(speciesData = pa_data,
                    k = 5,
                    selection = "random")
 
+
+sb <- spatialBlock(speciesData = pa_data, 
+                   species = "species",
+                   rasterLayer = awt,
+                   rows = 25,
+                   cols = 1,
+                   k = 5,
+                   selection = "systematic")
+
 sac <- spatialAutoRange(rasterLayer = awt,
                         sampleNumber = 5000,
                         doParallel = TRUE,
@@ -236,14 +254,15 @@ length(folds)
 
 #plot the folds
 siteInfo$folds <- sb$foldID
-qplot(x, y, data=siteInfo, colour=factor(folds))
-temp <- siteInfo[,c("grid","siteIndex","LinjeID","folds","admN")]
+ggplot2::qplot(x, y, data=siteInfo, colour=factor(folds))
 
-#do we have each adm in each fold?
-table(temp$admN,temp$folds)#no...
-
+#random
 saveRDS(siteInfo[,c("grid","siteIndex","LinjeID","folds")],
         file="data/folds_distanceModel.rds")
+
+#bands
+saveRDS(siteInfo[,c("LinjeID","grid","folds")],
+        file="data/folds_distanceModel_bands.rds")
 
 ### AUC ##################################################
 
