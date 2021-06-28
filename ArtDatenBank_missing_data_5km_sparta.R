@@ -97,11 +97,10 @@ summary(glm(species~Human,data=tempDF,family="binomial"))#large negative
 
 
 #all together
-summary(glm(species~bio1 + MountainBirchForest+ Bog + Forest + ODF + Meadows + OSF + Mire + Human +
-              SnowBeds + tree_line_position + I(tree_line_position^2),
-            data=tempDF,family="binomial"))
+glm1 <- glm(species~bio1 + MountainBirchForest+ Bog + Forest + ODF + Meadows + OSF + Mire + Human + SnowBeds + tree_line_position + I(tree_line_position^2),
+            data=tempDF,family="binomial")
 #meadows, bog and mountainbirch forest and ODF
-
+DescTools::PseudoR2(glm1)
 
 #large range of variables to test
 library(MuMIn)
@@ -127,6 +126,7 @@ glm1<-glm(species ~ scale(bio1) +
             scale(elevation^2),
           family="binomial",data=tempDF)
 summary(glm1)
+DescTools::PseudoR2(glm1)
 
 dd <- dredge(glm1)
 subset(dd, delta < 2)
@@ -146,47 +146,12 @@ ggplot(tempDF)+
   geom_point(aes(x,y,colour=fits.se),shape=15,size=rel(1))+
   scale_colour_gradient(low="steelblue",high="red")
 
-### GLM - number ###############################################################
-
-# #glm - number of visits as the response
-# 
-# visitGrid <- ddply(listlengthDF,.(grid),summarise,
-#                    nuVisits = length(y[!is.na(y)]),
-#                    nuObs = sum(y[!is.na(y)]))
-# 
-# tempDF <- merge(tempDF,visitGrid,by="grid")
-# 
-# #remove nonsurvyed data
-# tempDF <- subset(tempDF,nuVisits>0)
-# table(tempDF$nuObs)
-# 
-# #all together
-# glm1 <- glm(cbind(nuObs,nuVisits-nuObs)~
-#               scale(bio1) + scale(Open) + 
-#               scale(tree_line_position) + scale(I(tree_line_position^2)),
-#             data=tempDF,family="binomial")
-# 
-# #put probability scale on the same as last one
-# 
-# #plot predictions
-# tempDF$fits<-predict(glm1,type="response",newdata=tempDF)
-# ggplot(tempDF)+
-#   geom_point(aes(x,y,colour=fits),shape=15,size=rel(1))+
-#   scale_colour_gradient(low="steelblue",high="red")
-# 
-# tempDF$fits.se<-predict(glm1,type="response",newdata=tempDF,se.fit=TRUE)$se.fit
-# ggplot(tempDF)+
-#   geom_point(aes(x,y,colour=fits.se),shape=15,size=rel(1))+
-#   scale_colour_gradient(low="steelblue",high="red")
-# 
-# qplot(fits,fits.se,data=tempDF)
-
 ### brt #########################################################################
 
 #Boosted regression tree
 library(dismo)
 library(gbm)
-brt1 <- gbm.step(data=tempDF, gbm.x = c(2:14,20:22,29:30), gbm.y = 33, family = "bernoulli")
+brt1 <- gbm.step(data=tempDF, gbm.x = c(2:14,20:21,29:30), gbm.y = 33, family = "bernoulli")
 
 summary(brt1)
 #                                   var    rel.inf
@@ -208,6 +173,23 @@ summary(brt1)
 gbm.plot(brt1, n.plots=12, write.title = TRUE)
 gbm.plot.fits(brt1)
 #non-linear plot for tree line position and bio1
+
+#### quadratic effects #########################################################
+
+glm1<-glm(species ~ tree_line_position +
+            I(tree_line_position^2)+
+            Bog +
+            ODF + 
+            OSF +
+            y + 
+            bio1 +
+            I(bio1^2)+
+            Meadows +
+            MountainBirchForest +
+            OSF,
+          family="binomial",data=tempDF)
+summary(glm1)
+DescTools::PseudoR2(glm1)
 
 ### ignore from here on ########################################################
 
