@@ -10,7 +10,6 @@ library(ggplot2)
 ### check siteInfo #######################################################
 
 siteInfo_Occ <- readRDS("data/siteInfo_ArtsDaten.rds")
-siteInfo_Abund <- readRDS("data/siteInfo_LineTransects.rds")
 
 ### common grid ###########################################################
 
@@ -38,7 +37,11 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 ### plot map #################################################
 
-out1 <- readRDS("model-outputs/outSummary_occModel_upscaling.rds")
+#or slurm models
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
+
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 table(out1$Rhat<1.1)
@@ -68,15 +71,60 @@ crs(mygrid) <- equalM
 tm_shape(mygrid)+
   tm_raster(title="Occupancy prob",palette="YlGnBu")
 
-### plot coefficients #######################################
+### model selection ##########################################
 
+#model 1 - a priori selection
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
-#betas <- betas[1:8,]
-#betas$variables <- c("tree_line_position", "tree_line_position2","bio1","bio1_2", "bio6","elevation","prefopen", "open")
+betas <- subset(betas,Param!="beta.det.open")
+betas <- subset(betas,Param!="beta.effort")
+betas$variables <- c("tree_line_position","tree_line_position_2","geo_y","bio1","bio1_2","Bog","Meadows","ODF","OSF","MountainBirchForest")
 
 ggplot(betas)+
-  geom_crossbar(aes(x=variables,y=mean,
-                    ymin=X2.5.,ymax=X97.5.))+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("effect size on occupancy")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
+
+
+#model 2 = lasso
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+betas <- subset(out1,grepl("beta",out1$Param))
+betas <- subset(betas,Param!="beta.det.open")
+betas <- subset(betas,Param!="beta.effort")
+betas$variables <- c("bio6","bio5","tree_line_position","MountainBirchForest","Bog","ODF","Meadows",
+                               "OSF","Mire","SnowBeds","y","distCoast",
+                               "bio6_2","bio5_2","tree_line_position_2",
+                               "MountainBirchForest_2","Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2",
+                               "SnowBeds_2","y_2","distCoast_2")
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("effect size on occupancy")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
+
+#model 3 = variable indicator
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+betas <- subset(out1,grepl("beta",out1$Param))
+betas <- subset(betas,Param!="beta.det.open")
+betas <- subset(betas,Param!="beta.effort")
+betas$variables <- c("bio6","bio5","tree_line_position","MountainBirchForest","Bog","ODF","Meadows",
+                     "OSF","Mire","SnowBeds","y","distCoast",
+                     "bio6_2","bio5_2","tree_line_position_2",
+                     "MountainBirchForest_2","Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2",
+                     "SnowBeds_2","y_2","distCoast_2")
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
   coord_flip()+
   theme_bw()+
   ylab("effect size on occupancy")+
@@ -85,7 +133,7 @@ ggplot(betas)+
 
 ### AUC ######################################################
 
-out2 <- readRDS("model-outputs/out_update_occModel_upscaling.rds")
+out2 <- readRDS("model-outputs/out_update_occModel_upscaling_v1.rds")
 
 library(ggmcmc)
 ggd2 <- ggs(out2$samples)
@@ -172,23 +220,49 @@ temp %>%
 
 bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
 
+#slurm model
+
+#negative binomial models
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_1.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_2.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
+
+
+#poisson models
+out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_1.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_2.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_3.rds")
+
 ### plot map ##############################################
 
-out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
+#density over range of line transects
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
-
-#density over range of line transects
 preds <- subset(out1,grepl("meanDensity",out1$Param))
 bufferData$preds <- preds$mean
 bufferData$predsSD <- preds$sd
+summary(bufferData$preds)
+
+#model 1
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#5.118  10.755  12.963  12.955  15.566  24.552
+#model 2
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#2.882  10.927  12.688  12.920  14.880  24.797
+#model 3
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#3.58   11.03   13.02   12.95   15.07   21.90
 
 #tmap
 bufferData_st <- st_as_sf(bufferData,coords=c("x","y"),crs=equalM)
 density_tmap <- tm_shape(NorwayOrigProj)+
   tm_borders()+
 tm_shape(bufferData_st)+
-  tm_dots("preds",title="Est. Density",palette="YlGnBu",size=0.1)+
+  tm_dots("preds",title="Est. Density",palette="YlGnBu",size=0.05)+
   tm_layout(legend.position=c("left","top"))
 
 #plot side by side with occupancy
@@ -216,6 +290,7 @@ ggplot(siteInfo_Occ)+
 
 #what does realised density look like?
 siteInfo_Occ$real_density <- siteInfo_Occ$preds * siteInfo_Occ$density_preds
+summary(siteInfo_Occ$real_density)
 mygrid[] <- NA
 mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$real_density
 tm_shape(mygrid)+
@@ -223,7 +298,7 @@ tm_shape(mygrid)+
 
 #is it just outliers?
 summary(siteInfo_Occ$real_density)
-siteInfo_Occ$real_density[siteInfo_Occ$real_density>400] <- 400
+siteInfo_Occ$real_density[siteInfo_Occ$real_density>300] <- 300
 mygrid[] <- NA
 mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$real_density
 tm_shape(mygrid)+
@@ -231,32 +306,18 @@ tm_shape(mygrid)+
 #yes! it was just weird outliers!!
 sum(siteInfo_Occ$real_density)
 
-### plot coefficients #####################################
-
-betas <- subset(out1,grepl("beta",out1$Param))
-betas$Param <- c("bio1","open","tree_line_position", "tree_line_position2")
-
-ggplot(betas)+
-  geom_crossbar(aes(x=Param,y=mean,
-                    ymin=X2.5.,ymax=X97.5.))+
-  coord_flip()+
-  theme_bw()+
-  ylab("effect size on occupancy")+
-  geom_hline(yintercept=0,color="red",
-             linetype="dashed")
-
 ### predictive fits #################
 
-#full data model
-
-out1 <- readRDS("model-outputs/outSummary_linetransectModel_variables.rds")
+#mean across all years
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 
-#mean across all years
 preds <- subset(out1,grepl("meanExpNu",out1$Param))
 dataMeans <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
 preds$data <- as.numeric(dataMeans)
+summary(preds$data)
+summary(preds$mean)
+
 #main plot
 qplot(data,mean,data=preds)+
   geom_abline(intercept=0,slope=1)
@@ -264,7 +325,7 @@ qplot(data,mean,data=preds)+
 #on log-scale
 qplot(data,mean,data=preds)+
   geom_abline(intercept=0,slope=1)+
-  scale_x_log10()+scale_y_log10()#not bad, but not great
+  scale_x_log10()+scale_y_log10()
 cor.test(log(preds$data),log(preds$mean))
 #v1 - correlation is 0.358
 #v2 - correlation is 0.367
@@ -272,10 +333,139 @@ cor.test(log(preds$data),log(preds$mean))
 #v4 - correlation is 0.506
 #v5 - correlation is 0.524
 #v6 - correlation is 0.546
+#model 1 - 0.55
+#model 2 - 0.60
+#model 3 - 0.58
 
-#BPV - still bad???
-hist(out1$mean[out1$Param=="bpv"])
-summary(out1$mean[out1$Param=="bpv"])
+#poisson model
+#model 1 - 0.7159
+#model 2 - 0.7232
+#model 3 - 0.7211
+
+### BPV ###################################################
+
+#compare expNuIndivs and expNuIndivs.new
+exp <- subset(out1,grepl("expNuIndivs",out1$Param))
+expNu <- subset(out1,grepl("expNuIndivs.new",out1$Param))
+
+hist(exp$mean)
+hist(expNu$mean)
+#look very similar!!!
+hist(exp$mean-expNu$mean)
+summary(exp$mean-expNu$mean)#centered on zero...
+
+#full models
+#negative binomial
+out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_1.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_2.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_3.rds")
+
+#poisson
+out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/out_linetransectModel_variables_1.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/out_linetransectModel_variables_2.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/out_linetransectModel_variables_3.rds")
+
+#BPV
+mean(out1$sims.list$fit.new > out1$sims.list$fit)
+
+hist(out1$sims.list$fit.new)
+summary(out1$sims.list$fit.new)
+median(out1$sims$fit)
+abline(v=median(out1$sims.list$fit),col="red")
+
+### Dharma ###############################################
+
+library(DHARMa)
+#get simulated data
+simulations = out1$sims.list$expNuIndivs.new
+
+#change into a 2-D matrix
+#https://stackoverflow.com/questions/37662433/r-3d-array-to-2d-matrix
+#dim(simulations)
+dim(simulations) <- c(dim(simulations)[1],599 * 11)
+simsMean <- simulations
+dim(simsMean) <- c(dim(simsMean)[1],599*11)
+simsMean = apply(simsMean, 2, median)
+
+#get model predictions
+preds = out1$sims.list$expNuIndivs
+dim(preds)
+dim(preds) <- c(dim(simulations)[1],599*11)
+preds = apply(preds, 2, median)
+#length(preds)
+
+#get observed data
+obs <- bugs.data$NuIndivs
+dim(obs)
+dim(obs) <- c(599*11)
+#length(obs)
+
+#now need to remove missing values
+notMiss <- !is.na(obs)
+length(notMiss)
+
+sim = createDHARMa(simulatedResponse = t(simulations[,notMiss]),
+                   observedResponse = obs[notMiss],
+                   fittedPredictedResponse = preds[notMiss],
+                   integerResponse = T)
+
+plot(sim)
+
+
+#poisson model - residuals less good!!
+
+### model selection #######################################
+
+#model 1
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_1.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+betas <- subset(out1,grepl("beta",out1$Param))
+betas$variables <- c("y",'bio6',"bio6_2","distCoast","distCoast_2",
+                     "bio5","bio5_2","tree_line","tree_line_2","OSF","SnowBeds")
+
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("effect size on abundance")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
+
+
+#model 2 = lasso
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_2.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+betas <- subset(out1,grepl("beta",out1$Param))
+betas$variables <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
+                     "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
+                     "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
+                     "Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2","SnowBeds_2")
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("effect size on abundance")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
+
+#model 3 = variable indicator
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+betas <- subset(out1,grepl("beta",out1$Param))
+betas$variables <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
+                     "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
+                     "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
+                     "Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2","SnowBeds_2")
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("effect size on abundance")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
 
 #### cross validation ######################################
 
@@ -372,9 +562,73 @@ summary(totalsInfo_mean)
 
 #### COMBINED model #####################################
 
+#from combined model:
+
 out1 <- readRDS("model-outputs/outSummary_simpleCombinedModel.rds")
 out1[row.names(out1)=="totalAbund",]
 
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("realAbund",out1$Param))
+
+#or get data from "HPC_simple_combined_analysis:
+
+out2 <- data.frame(out1$summary)
+out2$Param <- row.names(out2)
+preds <- subset(out2,grepl("realAbund",out2$Param))
+siteInfo_Occ$preds <- preds$mean
+summary(siteInfo_Occ$preds)#minus numbers??? 
+
+#bound to reasonable
+siteInfo_Occ$preds[siteInfo_Occ$preds<0] <- 0
+siteInfo_Occ$preds[siteInfo_Occ$preds>400] <- 400
+
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+crs(mygrid) <- equalM
+total_tmap <- tm_shape(mygrid)+
+  tm_raster(title="Abundance",palette="YlGnBu")
+total_tmap
+
+#plot uncertainty too
+siteInfo_Occ$preds <- preds$sd
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+crs(mygrid) <- equalM
+sd_tmap <- tm_shape(mygrid)+
+  tm_raster(title="Abundance uncertainty",palette="YlGnBu",n=6)
+sd_tmap
+
+#relationship between mean and uncertainity
+qplot(mean,sd^2,data=preds)+stat_smooth(method="lm")
+#positive....
+
+#get residuals of the relationship
+preds$var <- preds$sd^2
+preds$resid_sd <- preds$var/preds$mean
+preds$resid_sd[preds$resid_sd<0] <- 0 #where we have more variation than expected given the mean
+summary(preds$resid_sd)
+preds$resid_sd[preds$resid_sd>60] <- 60
+
+#plot it
+siteInfo_Occ$preds <- preds$resid_sd
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+resid_tmap <- tm_shape(mygrid)+
+  tm_raster(title="Overdispersion",palette="YlGnBu")
+resid_tmap
+
+#side by side
+tmap_arrange(sd_tmap,resid_tmap,nrow=1)
+
+#multiple them???
+siteInfo_Occ$preds <- sqrt(preds$resid_sd * preds$sd)
+siteInfo_Occ$preds[siteInfo_Occ$preds<=0] <- 0.001
+summary(siteInfo_Occ$preds)
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+combined <- tm_shape(mygrid)+
+  tm_raster(title="Combined",palette="YlGnBu",style="cont")
+
+tmap_arrange(sd_tmap,resid_tmap,combined, nrow=1)
+#model effect of number of CS data points of each type? not here, elsewhere
