@@ -139,6 +139,7 @@ StrIdx <- array(data=0, dim = c(bugs.data$nvisit,bugs.data$nyear))
 for(i in 1:bugs.data$nvisit){
   StrIdx[i,bugs.data$year[i]] <- 1
 }
+
 bugs.data$StrIdx <- StrIdx
 
 ### scale variables ##########################################
@@ -249,7 +250,7 @@ out1 <- jags(bugs.data,
 saveRDS(out1$summary,file=paste0("outSummary_occModel_upscaling_",task.id,".rds"))
 
 #update by a small number and get full model
-out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py",
+out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py", 
                                             "e.count","sim.count",
                                             "fit","fit.new"),n.iter=1000)
 
