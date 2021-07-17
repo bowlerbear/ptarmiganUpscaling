@@ -53,12 +53,19 @@
     #intercept
     int.d ~ dnorm(0,0.001)    
     
-    #random line effect
+    #random line effect - all lines
     line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
     line.d.tau <- pow(line.d.sd,-2)
-    for(j in 1:nsite){
+    for(j in 1:n.preds){
       random.d.line[j] ~ dnorm(0,line.d.tau)
     }
+    
+    #random line effect
+    #line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    #line.d.tau <- pow(line.d.sd,-2)
+    #for(j in 1:nsite){
+    #  random.d.line[j] ~ dnorm(0,line.d.tau)
+    #}
     
     #random adm effect
     adm.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
@@ -105,8 +112,8 @@
         log(Density.jt[j,t]) <- int.d + 
                             random.d.year[t] +
                             inprod(beta[],occDM[j,]) +
-                            random.d.adm[adm[j]] 
-                            #random.d.line[j] 
+                            random.d.adm[adm[j]] + 
+                            random.d.line[siteAll[j]] 
                             
                             
 
@@ -114,52 +121,57 @@
     
     #predict observations - original scale and density scale
     for(j in 1:nsite){
-      #original scale
-      meanExpNu[j] <- mean(expNuIndivs[j,])
-      #density scale 
       meanDensity[j] <- mean(Density.jt[j,])
       
     }
-    
   
     #mean density at grids across Norway
     for(j in 1:n.preds){
-      log(Density.km[j]) <- int.d + inprod(beta[],predDM[j,]) + random.d.adm[pred.adm[j]]  
+    
+      #for each grid
+      log(Density.km[j]) <- int.d + 
+                            inprod(beta[],predDM[j,]) + 
+                            random.d.adm[pred.adm[j]]+
+                            random.d.line[j]
+      
       Density[j] <- Density.km[j]*25 # since there are 25 km per grid
     }
 
     #totalPop <- sum(Density)
 
-    #calculate the Bayesian p-value
-    e <- 0.0001
+    #calculate the Bayesian p-value - at the site-level
     
+    #get expected values per site
     for(j in 1:nsite){
-      for(t in 1:nyear){
-        
+      for(t in 1:nyear){ 
+
         #expected value of model
         exp[j,t] <- (r*(1-p[j,t]))/p[j,t]
-        
-        #compared to data
-        chi2[j,t] <- pow((NuIndivs[j,t] - exp[j,t]),2) / (sqrt(exp[j,t])+e)
-        
         #New samples
-        #compared to simulated values
         NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
         
-        chi2.new[j,t] <- pow((NuIndivs.new[j,t] - exp[j,t]),2) / (sqrt(exp[j,t])+e) 
-        
       }
+      exp.j[j] <- mean(exp[j,])
+      NuIndivs.j[j] <- mean(NuIndivs[j,])
+      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])
     }
     
-
+    e <- 0.0001
+    
+    #do discrepancy at the site-level
+    for(j in 1:nsite){
+        
+        #compared to data
+        chi2[j] <- pow((NuIndivs.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e)
+        
+        #compared to simulated values
+        chi2.new[j] <- pow((NuIndivs.new.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e) 
+      
+    }
+    
     # Add up discrepancy measures for entire data set
-    for(t in 1:nyear){
-      fit.t[t] <- sum(chi2[,t])                     
-      fit.new.t[t] <- sum(chi2.new[,t])             
-    }
-    
-    fit <- sum(fit.t[])
-    fit.new <- sum(fit.new.t[])
+      fit <- sum(chi2[])                     
+      fit.new <- sum(chi2.new[])             
     
     }
     
