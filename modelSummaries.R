@@ -5,6 +5,9 @@ library(maptools)
 library(rgeos)
 library(tmap)
 library(ggplot2)
+library(ggmcmc)
+library(tidyverse)
+
 #tmaptools::palette_explorer()
 
 ### check siteInfo #######################################################
@@ -131,12 +134,28 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
+
+### BPV #####################################################
+
+#or slurm models
+out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_1.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_2.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_3.rds")
+
+#fit vs fit new
+hist(out1$sims.list$fit.new)
+summary(out1$sims.list$fit.new)
+median(out1$sims$fit)
+abline(v=median(out1$sims.list$fit),col="red")
+mean(out1$sims.list$fit.new > out1$sims.list$fit)
+#good!!
+
 ### AUC ######################################################
 
-out2 <- readRDS("model-outputs/out_update_occModel_upscaling_v1.rds")
+#get full slurm models from previous section
 
 library(ggmcmc)
-ggd2 <- ggs(out2$samples)
+ggd2 <- ggs(out1$samples)
 
 #Z against psi
 Preds <- subset(ggd2,grepl("mid.psi",ggd2$Parameter))
@@ -178,8 +197,7 @@ for (i in 1:nu_Iteractions){
   
   py.vals <- Py_preds$value[Py_preds$Iteration==i]
   
-  pred <- ROCR::prediction(py.vals, 
-                           bugs.data$y)
+  pred <- ROCR::prediction(bugs.data$y,py.vals)
   
   #get AUC
   perf <- ROCR::performance(pred, "auc")
@@ -192,11 +210,12 @@ summary(AUC_py)
 
 ### cross validation #######################################
 
-myfolds <- list.files("model-outputs/occModel_CV") %>%
-            str_subset("fold")
+#model 1
+myfolds <- list.files("model-outputs/SLURM/occModel/CV") %>%
+            str_subset("BUGS_occuModel_upscaling_CV.txt")
 
 temp <- plyr::ldply(1:5,function(x){
-  temp <- readRDS(paste0("model-outputs/occModel_CV/",myfolds[x]))
+  temp <- readRDS(paste0("model-outputs/SLURM/occModel/CV/",myfolds[x]))
   temp$fold.id <- x
   return(temp)
 })
@@ -342,17 +361,24 @@ cor.test(log(preds$data),log(preds$mean))
 #model 2 - 0.7232
 #model 3 - 0.7211
 
+#with random line transect
+#model 1 - 0.8946807 
+
 ### BPV ###################################################
 
-#compare expNuIndivs and expNuIndivs.new
-exp <- subset(out1,grepl("expNuIndivs",out1$Param))
-expNu <- subset(out1,grepl("expNuIndivs.new",out1$Param))
+#compare expNuIndivs and NuIndivs.new
+exp <- subset(out1,grepl("exp",out1$Param))
+expNu <- subset(out1,grepl("NuIndivs.new",out1$Param))
 
+hist(dataMeans)
 hist(exp$mean)
 hist(expNu$mean)
 #look very similar!!!
 hist(exp$mean-expNu$mean)
 summary(exp$mean-expNu$mean)#centered on zero...
+summary(dataMeans)#tend to be higher....
+summary(expNu$mean)#tend to be smaller
+summary(exp$mean)#tend to be smaller
 
 #full models
 #negative binomial
@@ -372,12 +398,14 @@ hist(out1$sims.list$fit.new)
 summary(out1$sims.list$fit.new)
 median(out1$sims$fit)
 abline(v=median(out1$sims.list$fit),col="red")
+#good!!!
+
 
 ### Dharma ###############################################
 
 library(DHARMa)
 #get simulated data
-simulations = out1$sims.list$expNuIndivs.new
+simulations = out1$sims.list$NuIndivs.new
 
 #change into a 2-D matrix
 #https://stackoverflow.com/questions/37662433/r-3d-array-to-2d-matrix
@@ -470,95 +498,117 @@ ggplot(betas)+
 #### cross validation ######################################
 
 #CV fold models
+allFiles <- list.files("model-outputs/SLURM/distanceModel/CV")
 
-library(ggmcmc)
-#get all files for fold 1
-fold <- 4
-#folder <- "null"
-folder <- "environ_v2"
+#write a function to test CV for each fold and dataset (train or test)
+testAbundanceCV <- function(dataset = "train",
+                            mymodel = "linetransectModel_variables_CV.txt",
+                            fold = 1){
 
-myFiles <- list.files(paste0("model-outputs/linetransectModel_CV/",folder))
-myFolds <- myFiles[grepl(paste0("_",fold,".rds"),myFiles)]
+#get files for model and fold  
+myFiles <- allFiles[grepl(mymodel,allFiles)]
+myFolds <- myFiles[grepl(fold,myFiles)]
 
 #read in main model
-out1 <- readRDS(paste("model-outputs/linetransectModel_CV",folder,myFolds[1],sep="/"))
+out1 <- readRDS(paste("model-outputs/SLURM/distanceModel/CV",myFolds[1],sep="/"))
 ggd <- ggs(out1$samples)
 
-#extraxt training data
-out1_train <- subset(ggd,grepl("mean.expNuIndivs_train",ggd$Parameter))
-out1_train$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_train$Parameter))
-out1_train$siteIndex <- as.numeric(as.character(out1_train$siteIndex))
-out1_train$index <- as.numeric(interaction(out1_train$Iteration,out1_train$Chain))
+#extract dataset data
+out1_dataset <- subset(ggd,grepl(paste0("mean.expNuIndivs_",dataset),ggd$Parameter))
+out1_dataset$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_dataset$Parameter))
+out1_dataset$siteIndex <- as.numeric(as.character(out1_dataset$siteIndex))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
 
 #get actual NuIndiv
-train_fold <- myFolds[grepl("train",myFolds)]
-totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV/",folder,train_fold,sep="/"))
+dataset_fold <- myFolds[grepl(dataset,myFolds)]
+totalsInfo <- readRDS(paste("model-outputs/SLURM/distanceModel/CV",dataset_fold,sep="/"))
 totalsInfo_mean <- rowMeans(totalsInfo,na.rm=T)
 
 #check they are consistent:
-length(unique(out1_train$siteIndex)) == dim(totalsInfo)[1]
+length(unique(out1_dataset$siteIndex)) == dim(totalsInfo)[1]
 
 #plot correlation between mean values
-meanVals <- plyr::ddply(out1_train,"siteIndex",summarise,pred=mean(value))
+meanVals <- plyr::ddply(out1_dataset,"siteIndex",summarise,pred=mean(value))
 meanVals$obs <- totalsInfo_mean
-qplot(log(obs),log(pred),data=meanVals)
-cor.test(log(meanVals$obs),log(meanVals$pred))#0.33
+#qplot(log(obs),log(pred),data=meanVals)
+#cor.test(log(meanVals$obs),log(meanVals$pred))#0.48
 
 #get difference between this value and the simulated values
-mad_train <- as.numeric()
-rmse_train <- as.numeric()
-n.index <- max(out1_train$index)
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
 
 for(i in 1:n.index){
-  mad_train[i] <- mean(abs(totalsInfo_mean[!is.na(totalsInfo_mean)] - 
-                       out1_train$value[out1_train$index==i][!is.na(totalsInfo_mean)]))
+  mad_dataset[i] <- mean(abs(totalsInfo_mean[!is.na(totalsInfo_mean)] - 
+                       out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mean)]))
   
-  rmse_train[i] <- sqrt(mean((totalsInfo_mean[!is.na(totalsInfo_mean)] - 
-                        out1_train$value[out1_train$index==i][!is.na(totalsInfo_mean)])^2))
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mean[!is.na(totalsInfo_mean)] - 
+                        out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mean)])^2))
   
 }
 
-summary(mad_train)
-hist(mad_train)
-hist(rmse_train)
-summary(totalsInfo_mean)
-
-
-#test data
-out1_test <- subset(ggd,grepl("mean.expNuIndivs_test",ggd$Parameter))
-out1_test$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_test$Parameter))
-out1_test$siteIndex <- as.numeric(as.character(out1_test$siteIndex))
-out1_test$index <- as.numeric(interaction(out1_test$Iteration,out1_test$Chain))
-
-#get actual NuIndiv
-test_fold <- myFolds[grepl("test",myFolds)]
-totalsInfo <- readRDS(paste("model-outputs/linetransectModel_CV",folder,test_fold,sep="/"))
-totalsInfo_mean <- rowMeans(totalsInfo,na.rm=T)
-
-#check they are consistent:
-length(unique(out1_test$siteIndex)) == dim(totalsInfo)[1]
-
-#plot correlation between mean values
-meanVals <- plyr::ddply(out1_test,"siteIndex",summarise,pred=median(value))
-meanVals$obs <- totalsInfo_mean
-qplot(log(obs),log(pred),data=meanVals)#bad:) 
-cor.test(log(meanVals$obs),log(meanVals$pred))#0.42!! 
-
-#get difference between this value and the simulated values
-mad_test <- as.numeric()
-rmse_test <- as.numeric()
-n.index <- max(out1_test$index)
-for(i in 1:n.index){
-  mad_test[i] <- mean(abs(totalsInfo_mean[!is.na(totalsInfo_mean)] - 
-                       out1_test$value[out1_test$index==i][!is.na(totalsInfo_mean)]))
-  rmse_test[i] <- sqrt(mean((totalsInfo_mean[!is.na(totalsInfo_mean)] - 
-                          out1_test$value[out1_test$index==i][!is.na(totalsInfo_mean)])^2))
+#package results into a dataset
+data.frame(model = mymodel,
+           fold = fold,
+           dataset = dataset,
+           cor = cor(log(meanVals$obs),log(meanVals$pred)),
+           mad_mean = mean(mad_dataset),
+           mad_sd = sd(mad_dataset),
+           mad_median = quantile(mad_dataset, 0.5),
+           mad_lower = quantile(mad_dataset, 0.25),
+           mad_upper = quantile(mad_dataset, 0.75),
+           rmse_mean = mean(rmse_dataset),
+           rmse_sd = sd(rmse_dataset),
+           rmse_median = quantile(rmse_dataset, 0.5),
+           rmse_lower = quantile(rmse_dataset, 0.25),
+           rmse_upper = quantile(rmse_dataset, 0.75))
 }
 
-summary(mad_test)
-hist(mad_test)
-hist(rmse_test)
-summary(totalsInfo_mean)
+
+#apply function to the model outputs
+
+#standard model
+train_1 <- 1:5 %>%
+map_dfr(function(i)
+  testAbundanceCV(dataset = "train", mymodel = "linetransectModel_variables_CV.txt",fold = i)) 
+test_1 <- 1:5 %>%
+  map_dfr(function(i)
+    testAbundanceCV(dataset = "test", mymodel = "linetransectModel_variables_CV.txt",fold = i))
+
+#lasso model
+train_2 <- 1:5 %>%
+  map_dfr(function(i)
+    testAbundanceCV(dataset = "train", mymodel = "linetransectModel_variables_LASSO_CV.txt",fold = i)) 
+test_2 <- 1:5 %>%
+  map_dfr(function(i)
+    testAbundanceCV(dataset = "test", mymodel = "linetransectModel_variables_LASSO_CV.txt",fold = i))
+
+#model selection model
+train_3 <- 1:5 %>%
+  map_dfr(function(i)
+    testAbundanceCV(dataset = "train", mymodel = "linetransectModel_variables_ModelSelection_CV.txt",fold = i)) 
+test_3 <- 1:5 %>%
+  map_dfr(function(i)
+    testAbundanceCV(dataset = "test", mymodel = "linetransectModel_variables_ModelSelection_CV.txt",fold = i))
+
+#combine
+allCV <- bind_rows(train_1,test_1,train_2,test_2,train_3,test_3) 
+
+#plots
+ggplot(allCV) + 
+  geom_point(aes(x=fold,y=cor,colour=model))+
+  facet_wrap(~dataset)
+
+ggplot(allCV) + 
+  geom_pointrange(aes(x = fold, y = mad_median, ymin = mad_lower, ymax = mad_upper,
+                      colour=model))+
+  facet_wrap(~dataset)
+
+ggplot(allCV) + 
+  geom_pointrange(aes(x = fold, y = rmse_median, ymin = rmse_lower, ymax = rmse_upper,
+                      colour=model))+
+  facet_wrap(~dataset)
+  
 
 #### COMBINED model #####################################
 
