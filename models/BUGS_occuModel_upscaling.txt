@@ -21,7 +21,6 @@
 
     #detection model:
       logit(p[j]) <-  int.d + 
-                      beta.det.open * det.open[j] +
                       beta.effort * Effort[j] +
                       random.det.year[year[j]] +
                       random.det.adm[det.adm[j]]
