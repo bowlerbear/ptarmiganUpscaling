@@ -12,7 +12,8 @@
       
       logit(muZ[i,t])<- int.alpha + inprod(beta[],occDM_train[i,]) + 
                           #random.adm[adm_train[i]] + 
-                          random.year[t] 
+                          random.year[t] +
+                          eta[i]
       
     }
   }   
@@ -85,29 +86,30 @@
     int.alpha <- logit(mean.psi)
  
     for(i in 1:n.covs){
-      beta[i] ~ dnorm(0,0.01)
+      beta[i] ~ ddexp(0, dd.tau)
     }
+    dd.tau ~ dgamma(0.01, 0.01)
     
     #years
     for(t in 1:nyear_train){
       random.year[t] ~ dnorm(0, tau.a)
     }
     tau.a <- 1/(sd.a * sd.a)
-    sd.a ~ dt(0, pow(2.5,-2), 1)T(0,)
+    sd.a ~ dt(0, 1, 1)T(0,) 
     
     #site effects
-    for (i in 1:nsite_train) {
-      eta[i] ~ dnorm(0, tau2)       
-    } 
-    tau2 <- 1/(sigma2 * sigma2) 
-    sigma2 ~ dt(0, pow(2.5,-2), 1)T(0,)
+    #for (i in 1:nsite_train) {
+    #  eta[i] ~ dnorm(0, tau2)       
+    #} 
+    #tau2 <- 1/(sigma2 * sigma2) 
+    #sigma2 ~ dt(0, 1, 1)T(0,) 
 
     #adm effects
     for(i in 1:n.adm_train){
       random.adm[i] ~ dnorm(0,random.adm.tau)
     }
     random.adm.tau <- pow(random.adm.sd,-2)
-    random.adm.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    random.adm.sd ~ dt(0, 1, 1)T(0,) 
 
     #Observation model priors
     ##########################
@@ -119,7 +121,7 @@
       random.det.year[t] ~ dnorm(0, tau.lp)            
     }
     tau.lp <- 1 / (sd.lp * sd.lp)                 
-    sd.lp ~ dt(0, pow(2.5,-2), 1)T(0,) 
+    sd.lp ~ dt(0, 1, 1)T(0,)  
     
     #covariate effects
     beta.det.open ~ dnorm(0,0.01)
@@ -130,7 +132,7 @@
       random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
     }
     random.det.adm.tau <- pow(random.adm.sd,-2)
-    random.det.adm.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    random.det.adm.sd ~ dt(0, 1, 1)T(0,) 
 
 
   }
