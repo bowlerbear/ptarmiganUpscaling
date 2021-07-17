@@ -57,13 +57,23 @@ siteInfo <- arrange(siteInfo,siteIndex)
 siteInfo$adm <- bufferData$adm[match(siteInfo$LinjeID,bufferData$LinjeID)]
 siteInfo$admN <- as.numeric(as.factor(siteInfo$adm))
 
+### choose model ##############################################
+
+modelTaskID <- read.delim(paste(myfolder,"modelTaskID_distanceModel_CV.txt",sep="/"),as.is=T)
+
+#get task id
+task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
+
+#get model for this task
+mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
+
 ### folds ########################################################
 
 folds <- readRDS(paste(myfolder,"folds_distanceModel_bands.rds",sep="/"))
 siteInfo$fold <- folds$fold[match(siteInfo$LinjeID,folds$LinjeID)]
 
 #select fold of this task
-fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
+fold.id = modelTaskID$Fold[which(modelTaskID$TaskID==task.id)]
 
 #split into test and train
 siteInfo_test <- subset(siteInfo,fold == fold.id)
@@ -129,16 +139,6 @@ bugs.data <- list(#For the state model
 
 names(bugs.data)
 
-### choose model ##############################################
-
-modelTaskID <- read.delim(paste(myfolder,"modelTaskID_distanceModel_CV.txt",sep="/"),as.is=T)
-
-#get task id
-task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
-
-#get model for this task
-mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
-
 ### scale vars ################################################
 
 bufferData[,-1] <- plyr::numcolwise(scale)(bufferData[,-1])
@@ -150,7 +150,6 @@ all(siteInfo_train$LinjeID==bufferData_train$LinjeID)
 #test dataset
 bufferData_test <- subset(bufferData,LinjeID %in% siteInfo_test$LinjeID)
 all(siteInfo_test$LinjeID==bufferData_test$LinjeID)
-
 
 ### standard model  ###########################################
 
@@ -274,11 +273,11 @@ out2 <- update(out1,
                                       "mean.Density_train","mean.Density_test"),
                n.iter = 1000)
 
-saveRDS(out2,file=paste0("out_update_linetransectModel_CV_",fold.id,".rds"))
+saveRDS(out2,file=paste0("out_update_",mymodel,"_",fold.id,".rds"))
 
 #and save test and training dataset
-saveRDS(totalsInfo,file=paste0("totalsInfo_train_CV_",fold.id,".rds"))
-saveRDS(totalsInfo_test,file=paste0("totalsInfo_test_CV_",fold.id,".rds"))
+saveRDS(totalsInfo,file=paste0("totalsInfo_train_CV_",mymodel,"_",fold.id,".rds"))
+saveRDS(totalsInfo_test,file=paste0("totalsInfo_test_CV_",mymodel,"_",fold.id,".rds"))
 
 ### end ########################################################################
 
