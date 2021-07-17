@@ -72,6 +72,16 @@ listlengthDF <- subset(listlengthDF,!is.na(species))
 siteInfo <- subset(listlengthDF,!duplicated(grid))
 siteInfo <- arrange(siteInfo,grid)
 
+### choose model ##############################################
+
+modelTaskID <- read.delim(paste(myfolder,"modelTaskID_occuModel_CV.txt",sep="/"),as.is=T)
+
+#get task id
+task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
+
+#get model for this task
+mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
+
 ### folds #############################################################
 
 folds <- readRDS(paste(myfolder,"folds_occModel_bands.rds",sep="/"))
@@ -79,7 +89,7 @@ listlengthDF$fold <- folds$fold[match(listlengthDF$grid,folds$grid)]
 table(listlengthDF$fold)
 
 #select fold of this task
-fold.id = as.integer(Sys.getenv("SGE_TASK_ID", "1"))
+fold.id = modelTaskID$Fold[which(modelTaskID$TaskID==task.id)]
 #fold.id = 1
 
 #split intp test and train
@@ -152,39 +162,99 @@ siteInfo[,-c(1:10)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:10)])
 siteInfo_test <- subset(siteInfo,grid %in% siteInfo_test$grid)
 siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
 
-### fit model ########################################################
+### choose covariates ##########################################################
 
-#specify model structure
-bugs.data$occDM_train <- model.matrix(~ scale(siteInfo_train$tree_line_position) + 
-                                  scale(siteInfo_train$tree_line_position^2) +
-                                  scale(siteInfo_train$y) +
-                                  scale(siteInfo_train$bio1) +
-                                  scale(siteInfo_train$bio1^2) +
-                                  scale(siteInfo_train$Bog) +
-                                  scale(siteInfo_train$Meadows) +
-                                  scale(siteInfo_train$ODF) +
-                                  scale(siteInfo_train$OSF) +
-                                  scale(siteInfo_train$MountainBirchForest))[,-1]
+#standard model
+if(mymodel == "BUGS_occuModel_upscaling_CV.txt"){
+  
+  #specify model structure - a priori picking variables
+  bugs.data$occDM_train <- model.matrix(~ siteInfo_train$tree_line_position +
+                                    I(siteInfo_train$tree_line_position^2) +
+                                    siteInfo_train$y +
+                                    siteInfo_train$bio1 +
+                                    I(siteInfo_train$bio1^2) +
+                                    siteInfo_train$Bog +
+                                    siteInfo_train$Meadows +
+                                    siteInfo_train$ODF +
+                                    siteInfo_train$OSF +
+                                    siteInfo_train$MountainBirchForest)[,-1]
+  
+  bugs.data$occDM_test <- model.matrix(~ siteInfo_test$tree_line_position +
+                                          I(siteInfo_test$tree_line_position^2) +
+                                          siteInfo_test$y +
+                                          siteInfo_test$bio1 +
+                                          I(siteInfo_test$bio1^2) +
+                                          siteInfo_test$Bog +
+                                          siteInfo_test$Meadows +
+                                          siteInfo_test$ODF +
+                                          siteInfo_test$OSF +
+                                          siteInfo_test$MountainBirchForest)[,-1]
 
-bugs.data$occDM_test <- model.matrix(~ scale(siteInfo_test$tree_line_position) + 
-                                        scale(siteInfo_test$tree_line_position^2) +
-                                        scale(siteInfo_test$y) +
-                                        scale(siteInfo_test$bio1) +
-                                        scale(siteInfo_test$bio1^2) +
-                                        scale(siteInfo_test$Bog) +
-                                        scale(siteInfo_test$Meadows) +
-                                        scale(siteInfo_test$ODF) +
-                                        scale(siteInfo_test$OSF) +
-                                        scale(siteInfo_test$MountainBirchForest))[,-1]
-
+  #lasso model or model selection model
+}else{
+  
+  bugs.data$occDM_train <- model.matrix(~ siteInfo_train$bio6 +
+                                    siteInfo_train$bio5 +
+                                    siteInfo_train$tree_line_position +
+                                    siteInfo_train$MountainBirchForest +
+                                    siteInfo_train$Bog +
+                                    siteInfo_train$ODF + 
+                                    siteInfo_train$Meadows +
+                                    siteInfo_train$OSF +
+                                    siteInfo_train$Mire +
+                                    siteInfo_train$SnowBeds +
+                                    siteInfo_train$y +
+                                    siteInfo_train$distCoast +
+                                    I(siteInfo_train$bio6^2) +
+                                    I(siteInfo_train$bio5^2) +
+                                    I(siteInfo_train$tree_line_position^2) +
+                                    I(siteInfo_train$MountainBirchForest^2) +
+                                    I(siteInfo_train$Bog^2) +
+                                    I(siteInfo_train$ODF^2) + 
+                                    I(siteInfo_train$Meadows^2) +
+                                    I(siteInfo_train$OSF^2) +
+                                    I(siteInfo_train$Mire^2) +
+                                    I(siteInfo_train$SnowBeds^2) +
+                                    I(siteInfo_train$y^2) +
+                                    I(siteInfo_train$distCoast^2))[,-1]
+  
+  bugs.data$occDM_test <- model.matrix(~ siteInfo_test$bio6 +
+                                          siteInfo_test$bio5 +
+                                          siteInfo_test$tree_line_position +
+                                          siteInfo_test$MountainBirchForest +
+                                          siteInfo_test$Bog +
+                                          siteInfo_test$ODF + 
+                                          siteInfo_test$Meadows +
+                                          siteInfo_test$OSF +
+                                          siteInfo_test$Mire +
+                                          siteInfo_test$SnowBeds +
+                                          siteInfo_test$y +
+                                          siteInfo_test$distCoast +
+                                          I(siteInfo_test$bio6^2) +
+                                          I(siteInfo_test$bio5^2) +
+                                          I(siteInfo_test$tree_line_position^2) +
+                                          I(siteInfo_test$MountainBirchForest^2) +
+                                          I(siteInfo_test$Bog^2) +
+                                          I(siteInfo_test$ODF^2) + 
+                                          I(siteInfo_test$Meadows^2) +
+                                          I(siteInfo_test$OSF^2) +
+                                          I(siteInfo_test$Mire^2) +
+                                          I(siteInfo_test$SnowBeds^2) +
+                                          I(siteInfo_test$y^2) +
+                                          I(siteInfo_test$distCoast^2))[,-1]
+  
+}
 bugs.data$n.covs <- ncol(bugs.data$occDM_test)
+
+### fit model #######################################################
 
 params <- c("mean.p","beta","beta.effort")
 
-modelfile <- paste(myfolder,"BUGS_occuModel_upscaling_CV.txt",sep="/")
+modelfile <- paste(myfolder,mymodel,sep="/")
 
-n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
+#n.cores = as.integer(Sys.getenv("NSLOTS", "1")) 
 #n.cores = 3
+n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
 
 n.iterations = 20000
 
@@ -318,6 +388,6 @@ summary(AUC_psi_train)
 
 #combine all together and save
 all_AUCs <- data.frame(AUC_psi_test,AUC_psi_train,AUC_py_test,AUC_py_train)
-saveRDS(all_AUCs,file=paste0("all_AUCs_fold.id_",fold.id,".rds"))
+saveRDS(all_AUCs,file=paste0("all_AUCs_fold.id_",fold.id,"_",mymodel,".rds"))
 
 ### end ##################################################################
