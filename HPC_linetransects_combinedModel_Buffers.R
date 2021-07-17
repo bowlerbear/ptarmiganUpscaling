@@ -101,6 +101,13 @@ allDetections$admN <- siteInfo$admN[match(allDetections$LinjeID,
 siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrouped,
                                                       siteInfo$adm)]
   
+
+### line-transect index ########################################
+
+siteIndex_linetransects <- readRDS(paste(myfolder,"siteIndex_linetransects.rds",sep="/"))
+siteInfo$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo$LinjeID,
+                                                                      siteIndex_linetransects$LinjeID)]
+
 ### make bugs objects ###########################################
 
 bugs.data <- list(#For the state model
@@ -108,6 +115,7 @@ bugs.data <- list(#For the state model
   nyear = length(unique(allData$Year)),
   nadm = length(unique(siteInfo$admN)),
   site = siteInfo$siteIndex,
+  siteAll = siteInfo$siteIndex_All,
   adm = siteInfo$admN,
   pred.adm = siteInfo_ArtsDaten$admNgrouped,
   year = (1:length(unique(allData$Year))),
@@ -306,23 +314,28 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                      I(siteInfo_ArtsDaten$SnowBeds^2))[,-1]
 }
 
-myvars <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
-            "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
-            "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
-            "Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2","SnowBeds_2")
+
+# myvars <- c("y",'bio6',"bio6_2","distCoast","distCoast_2",
+#             "bio5","bio5_2","tree_line","tree_line_2","OSF","SnowBeds")
+# 
+# myvars <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
+#             "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
+#             "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
+#             "Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2","SnowBeds_2")
+
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 bugs.data$n.preds <- dim(bugs.data$predDM)[1]
-
-myvars <- c("y",'bio6',"bio6_2","distCoast","distCoast_2",
-            "bio5","bio5_2","tree_line","tree_line_2","OSF","SnowBeds")
 
 ### fit model #################################################
 
 library(rjags)
 library(jagsUI)
 
-params <- c("int.d","beta","meanDensity","meanExpNu","fit","fit.new",
-            "Density","g","expNuIndivs","exp","NuIndivs.new")
+params <- c("int.d","beta","g",
+            "meanDensity","Density",
+            "fit","fit.new",
+            "NuIndivs.j","NuIndivs.new.j","exp.j",
+            "random.d.line")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
