@@ -57,7 +57,7 @@
     #random line effect - all lines
     line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
     line.d.tau <- pow(line.d.sd,-2)
-    for(j in 1:n.preds){
+    for(j in 1:nsiteAll){
       random.d.line[j] ~ dnorm(0,line.d.tau)
     }
     
