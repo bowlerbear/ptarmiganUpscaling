@@ -214,6 +214,11 @@ summary(AUC_py)
 myfolds <- list.files("model-outputs/SLURM/occModel/CV") %>%
             str_subset("BUGS_occuModel_upscaling_CV.txt")
 
+#model 3
+myfolds <- list.files("model-outputs/SLURM/occModel/CV") %>%
+  str_subset("BUGS_occuModel_upscaling_ModelSelection_CV.txt")
+
+
 temp <- plyr::ldply(1:5,function(x){
   temp <- readRDS(paste0("model-outputs/SLURM/occModel/CV/",myfolds[x]))
   temp$fold.id <- x
@@ -235,26 +240,35 @@ temp %>%
   summarise(across(everything(),mean)) %>%
   colMeans()
 
+#need to improve detection model
+
 ### DISTANCE models ##########################################
 
 bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
 
 #slurm model
 
-#negative binomial models
+#negative binomial models - full random line effect (missing values for unsampled sites)
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_1.rds")
 
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_2.rds")
 
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 
+#### compare random effects #############################
 
-#poisson models
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_1.rds")
+#get preds of out1 below
+#model with random effects fitted to all 
 
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_2.rds")
+#negative binomial models - restricted line effect (only estimated for lines with data)
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/outSummary_linetransectModel_variables_3.rds")
 
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_3.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+preds_limited <- subset(out1,grepl("meanDensity",out1$Param))
+
+plot(preds$mean,preds_limited$mean)
+#many correlated but still noise...
 
 ### plot map ##############################################
 
@@ -331,7 +345,7 @@ sum(siteInfo_Occ$real_density)
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 
-preds <- subset(out1,grepl("meanExpNu",out1$Param))
+preds <- subset(out1,grepl("exp",out1$Param))
 dataMeans <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
 preds$data <- as.numeric(dataMeans)
 summary(preds$data)
@@ -340,6 +354,7 @@ summary(preds$mean)
 #main plot
 qplot(data,mean,data=preds)+
   geom_abline(intercept=0,slope=1)
+
 #correlated but noisey
 #on log-scale
 qplot(data,mean,data=preds)+
@@ -364,6 +379,9 @@ cor.test(log(preds$data),log(preds$mean))
 #with random line transect
 #model 1 - 0.8946807 
 
+#with full random line transect
+#model 1 - 0.8352454
+
 ### BPV ###################################################
 
 #compare expNuIndivs and NuIndivs.new
@@ -386,10 +404,8 @@ out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variabl
 out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_2.rds")
 out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_3.rds")
 
-#poisson
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/out_linetransectModel_variables_1.rds")
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/out_linetransectModel_variables_2.rds")
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/out_linetransectModel_variables_3.rds")
+#with limited line transect
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/out_linetransectModel_variables_1.rds")
 
 #BPV
 mean(out1$sims.list$fit.new > out1$sims.list$fit)
@@ -399,7 +415,6 @@ summary(out1$sims.list$fit.new)
 median(out1$sims$fit)
 abline(v=median(out1$sims.list$fit),col="red")
 #good!!!
-
 
 ### Dharma ###############################################
 
