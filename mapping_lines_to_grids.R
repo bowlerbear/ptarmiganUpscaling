@@ -4,6 +4,7 @@ head(siteInfo_ArtsDaten)
 
 #connect lines and grids - based on line centroids
 lines_to_grids <- readRDS("data/lines_to_grids.rds")
+subset(lines_to_grids,LinjeID %in% c("92","93"))#in the same grid
 
 #do we have the grid data for all the lines in this analysis
 siteInfo$LinjeID[!siteInfo$LinjeID %in% lines_to_grids$LinjeID]#yes!!!
@@ -51,5 +52,6 @@ siteInfo$grid[!is.na(siteInfo$grid_15km)] <- siteInfo$grid_15km[!is.na(siteInfo$
 siteInfo$grid[!siteInfo$grid %in% siteInfo_ArtsDaten$grid]
 siteInfo$siteIndex_All <- siteInfo_ArtsDaten$siteIndex[match(siteInfo$grid,siteInfo_ArtsDaten$grid)]
 siteInfo$LinjeID[is.na(siteInfo$siteIndex_All)]
-saveRDS(siteInfo[,c("LinjeID","siteIndex_All")], file="data/siteIndex_linetransects.rds")
+
+saveRDS(siteInfo[,c("LinjeID","grid","siteIndex_All")], file="data/siteIndex_linetransects.rds")
 
