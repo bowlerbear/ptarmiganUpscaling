@@ -40,7 +40,40 @@
     mid.psi[i] <- muZ[i,6]
   }
   
-
+#Bayesian p-value:
+  e <- 0.0001
+  #get expected number of detection per site 
+    for(t in 1:nyear){
+    
+        for(j in 1:nvisit){
+        
+          #expected count based on model fit
+          exp.idx[j,t] <- Py[j] * StrIdx[j,t]     
+          
+          #using simulated data
+          sim.idx[j,t] <- y.sim[j] * StrIdx[j,t]
+          
+          obs.idx[j,t] <- y[j] * StrIdx[j,t]
+              
+        }
+        
+    e.count[t] <- sum(exp.idx[,t])
+    sim.count[t] <- sum(sim.idx[,t])
+    obs.count[t] <- sum(obs.idx[,t])
+      
+    # Chi-square discrepancy for the actual data
+    chi2[t] <- pow((obs.count[t] - e.count[t]),2) / (e.count[t]+e)
+    
+    # Chi-square discrepancy for the simulated ('perfect') data
+    chi2.sim[t] <- pow((sim.count[t] - e.count[t]),2) / (e.count[t]+e)
+    
+    }
+    
+    # Add up individual chi2 values for overall fit statistic
+    fit <- sum(chi2)  
+    fit.new <- sum(chi2.sim) 
+    
+    
   #Priors 
 
   # State model priors
