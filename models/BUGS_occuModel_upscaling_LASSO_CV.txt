@@ -98,11 +98,11 @@
     sd.a ~ dt(0, 1, 1)T(0,) 
     
     #site effects
-    #for (i in 1:nsite_train) {
-    #  eta[i] ~ dnorm(0, tau2)       
-    #} 
-    #tau2 <- 1/(sigma2 * sigma2) 
-    #sigma2 ~ dt(0, 1, 1)T(0,) 
+    for (i in 1:nsite_train) {
+      eta[i] ~ dnorm(0, tau2)       
+    } 
+    tau2 <- 1/(sigma2 * sigma2) 
+    sigma2 ~ dt(0, 1, 1)T(0,) 
 
     #adm effects
     for(i in 1:n.adm_train){
