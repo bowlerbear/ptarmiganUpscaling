@@ -104,14 +104,36 @@ siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrou
 
 ### line-transect index ########################################
 
+#remember: some lines are given the same siteIndex (when they overlap in the same grid)
+
+#get mapping
 siteIndex_linetransects <- readRDS(paste(myfolder,"siteIndex_linetransects.rds",sep="/"))
+siteIndex_linetransects <- siteIndex_linetransects %>% ungroup()
+siteIndex_linetransects$siteIndex_All <- as.numeric(as.factor(siteIndex_linetransects$siteIndex_All))
+summary(siteIndex_linetransects$siteIndex_All)
+#306 grids are sampled
+
+#map to siteInfo
 siteInfo$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo$LinjeID,
                                                                       siteIndex_linetransects$LinjeID)]
+summary(siteInfo$siteIndex_All)
+
+#map to siteInfo_ArtsDaten (and adding indicies to unsampled grids)
+siteInfo_ArtsDaten$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo_ArtsDaten$grid,siteIndex_linetransects$grid)]
+summary(siteInfo_ArtsDaten$siteIndex_All)
+siteInfo_ArtsDaten <- plyr::arrange(siteInfo_ArtsDaten,siteIndex_All)
+
+#fill in unsampled ones with indices
+nuMissing <- sum(is.na(siteInfo_ArtsDaten$siteIndex_All))
+maxIndex <- max(siteIndex_linetransects$siteIndex_All)
+siteInfo_ArtsDaten$siteIndex_All[is.na(siteInfo_ArtsDaten$siteIndex_All)] <- (maxIndex+1):(maxIndex + nuMissing)
+summary(siteInfo_ArtsDaten$siteIndex_All)
 
 ### make bugs objects ###########################################
 
 bugs.data <- list(#For the state model
   nsite = length(unique(siteInfo$siteIndex)),
+  nsiteAll = length(unique(siteInfo_ArtsDaten$siteIndex_All)),
   nyear = length(unique(allData$Year)),
   nadm = length(unique(siteInfo$admN)),
   site = siteInfo$siteIndex,
