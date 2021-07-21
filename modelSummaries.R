@@ -268,7 +268,9 @@ out1$Param <- row.names(out1)
 preds_limited <- subset(out1,grepl("meanDensity",out1$Param))
 
 plot(preds$mean,preds_limited$mean)
+abline(0,1)
 #many correlated but still noise...
+cor(preds$mean,preds_limited$mean)
 
 ### plot map ##############################################
 
@@ -380,7 +382,7 @@ cor.test(log(preds$data),log(preds$mean))
 #model 1 - 0.8946807 
 
 #with full random line transect
-#model 1 - 0.8352454
+#model 1 - 0.89778
 
 ### BPV ###################################################
 
@@ -420,42 +422,65 @@ abline(v=median(out1$sims.list$fit),col="red")
 
 library(DHARMa)
 #get simulated data
-simulations = out1$sims.list$NuIndivs.new
+simulations = out1$sims.list$NuIndivs.new.j
 
 #change into a 2-D matrix
 #https://stackoverflow.com/questions/37662433/r-3d-array-to-2d-matrix
 #dim(simulations)
-dim(simulations) <- c(dim(simulations)[1],599 * 11)
-simsMean <- simulations
-dim(simsMean) <- c(dim(simsMean)[1],599*11)
-simsMean = apply(simsMean, 2, median)
+#dim(simulations) <- c(dim(simulations)[1],599 * 11)
 
 #get model predictions
-preds = out1$sims.list$expNuIndivs
-dim(preds)
-dim(preds) <- c(dim(simulations)[1],599*11)
-preds = apply(preds, 2, median)
+preds = out1$mean$exp.j
+#dim(preds)
+#dim(preds) <- c(dim(simulations)[1],599*11)
+#preds = apply(preds, 2, median)
 #length(preds)
 
-#get observed data
-obs <- bugs.data$NuIndivs
-dim(obs)
-dim(obs) <- c(599*11)
+#get mean of observed data
+obs <- apply(bugs.data$NuIndivs,1,median,na.rm=T)
+#dim(obs)
+#dim(obs) <- c(599*11)
 #length(obs)
 
 #now need to remove missing values
-notMiss <- !is.na(obs)
-length(notMiss)
+#notMiss <- !is.na(obs)
+#length(notMiss)
 
-sim = createDHARMa(simulatedResponse = t(simulations[,notMiss]),
-                   observedResponse = obs[notMiss],
-                   fittedPredictedResponse = preds[notMiss],
+#sim = createDHARMa(simulatedResponse = t(simulations[,notMiss]),
+#                   observedResponse = obs[notMiss],
+#                   fittedPredictedResponse = preds[notMiss],
+#                   integerResponse = T)
+
+sim = createDHARMa(simulatedResponse = t(simulations),
+                   observedResponse = obs,
+                   fittedPredictedResponse = preds,
                    integerResponse = T)
 
 plot(sim)
 
+### check model calc #####################################
 
-#poisson model - residuals less good!!
+# #mean of the data, calculated by the model
+# out1$mean$NuIndivs.j
+# 
+# #identify sites with complete data
+# nuYears <- apply(bugs.data$NuIndivs,1,function(x)sum(!is.na(x)))
+# bugs.data$NuIndivs[1:10,]
+# #how many sampled in each year
+# table(nuYears)
+# 
+# #45 was sampled in all years
+# bugs.data$NuIndivs[45,]
+# mean(bugs.data$NuIndivs[45,])
+# out1$mean$NuIndivs.j[45]#works!
+# 
+# #test another
+# #543
+# bugs.data$NuIndivs[543,]
+# mean(bugs.data$NuIndivs[543,])
+# out1$mean$NuIndivs.j[543]#works!
+# 
+# #few were visited in 2007 and 2008
 
 ### model selection #######################################
 
