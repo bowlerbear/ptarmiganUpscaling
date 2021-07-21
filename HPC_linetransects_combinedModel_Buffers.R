@@ -14,8 +14,8 @@ myfolder <- "/data/idiv_ess/ptarmiganUpscaling" #HPC
 #read in data frame
 allData <- readRDS(paste(myfolder,"allData.rds",sep="/"))
 
-#subset to years of interest
-allData <- subset(allData,Year>2006 & Year<2018)
+#subset to years of interest - 2008 onwards since many not visited in 2007
+allData <- subset(allData,Year>2007 & Year<2018)
 
 #remove hyphens for help with subsetting
 allData$Fylkesnavn <- gsub("-"," ",allData$Fylkesnavn)
@@ -23,6 +23,15 @@ allData$Fylkesnavn[which(allData$Rapporteringsniva=="Indre Troms")] <- "Troms"
 
 #mistake with 1405 - transect length
 allData$LengdeTaksert[which(allData$LinjeID==1405&allData$LengdeTaksert==1100)] <- 11000
+
+### remove outliers (see section below) #############################
+
+#LinjeID 1925 has twice as high counts as all others
+allData <- subset(allData, LinjeID!=1925)
+
+#drop lines visited in less than 5 years - see below
+allData <- subset(allData, !LinjeID %in% 
+                    c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339))
 
 ### aggregate data to the lines ######################################
 
@@ -34,7 +43,7 @@ tlDF <- allData %>%
                    groupSize=mean(totalIndiv,na.rm=T),
                    length = mean(LengdeTaksert,na.rm=T))
 sum(tlDF$totalsInfo,na.rm=T)
-#67946
+
 
 #insert NA when there is no transect but evidence of a survey
 tlDF$length[is.na(tlDF$length)] <- 0
@@ -42,14 +51,31 @@ tlDF$nuGroups[tlDF$length==0 ] <- NA
 tlDF$totalsInfo[tlDF$length==0] <- NA
 tlDF$groupSize[tlDF$length==0] <- NA
 summary(tlDF)
-sum(tlDF$length==0)#1302
+sum(tlDF$length==0)
+
+#### outlier check ##################################################
+
+#row/siteIndex 423 is an outlier/LinejeID 1925
+# tlDF %>%
+#     group_by(LinjeID) %>%
+#     summarise(med = median(totalsInfo,na.rm=T),transectlength=mean(length,na.rm=T)) %>%
+#     arrange(desc(med))
+# #remove this line
+# 
+# tlDF %>%
+#   group_by(LinjeID) %>%
+#   summarise(nuYears = sum(!is.na(totalsInfo))) %>%
+#   arrange(nuYears) %>%
+#   filter(nuYears <5)
+#15 lines
 
 ### get environ data #################################################
 
 bufferData <- readRDS(paste(myfolder,
                             "varDF_allEnvironData_buffers_idiv.rds",sep="/"))
-#why are some missing???
+nrow(tlDF)
 tlDF <- subset(tlDF, LinjeID %in% bufferData$LinjeID)
+nrow(tlDF)
 
 siteInfo_ArtsDaten <- readRDS(paste(myfolder,
                                     "siteInfo_ArtsDaten.rds",sep="/"))
@@ -74,7 +100,6 @@ transectLengths <- reshape2::acast(tlDF,siteIndex~Year,value.var="length")
 groupInfo[transectLengths==0] <- NA
 totalsInfo[transectLengths==0] <- NA
 sum(as.numeric(totalsInfo),na.rm=T)
-#67946
 
 #check alignment with other datasets
 all(row.names(groupInfo)==siteInfo$siteIndex)
@@ -87,6 +112,7 @@ all(row.names(groupInfo)==siteInfo$siteIndex)
 #                 summarise(nuZeros = sum(totalsInfo==0),meanCount = mean(totalsInfo))
 # table(siteSummary$nuZeros)  
 # summary(siteSummary$meanCount) #all above zero 
+
 
 ### detection data ################################################
 
@@ -101,17 +127,16 @@ allDetections$admN <- siteInfo$admN[match(allDetections$LinjeID,
 siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrouped,
                                                       siteInfo$adm)]
   
-
 ### line-transect index ########################################
 
 #remember: some lines are given the same siteIndex (when they overlap in the same grid)
 
 #get mapping
 siteIndex_linetransects <- readRDS(paste(myfolder,"siteIndex_linetransects.rds",sep="/"))
-siteIndex_linetransects <- siteIndex_linetransects %>% ungroup()
+siteIndex_linetransects <- siteIndex_linetransects %>% ungroup() %>% filter(LinjeID %in% siteInfo$LinjeID)
 siteIndex_linetransects$siteIndex_All <- as.numeric(as.factor(siteIndex_linetransects$siteIndex_All))
 summary(siteIndex_linetransects$siteIndex_All)
-#306 grids are sampled
+#302 grids are sampled
 
 #map to siteInfo
 siteInfo$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo$LinjeID,
