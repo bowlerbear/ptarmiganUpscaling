@@ -145,7 +145,7 @@ siteInfo$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo$L
                                                                       siteIndex_linetransects$LinjeID)]
 summary(siteInfo$siteIndex_All)
 
-#map to siteInfo_ArtsDaten (and adding indicies to unsampled grids)
+#map to siteInfo_ArtsDaten (and adding indices to unsampled grids)
 siteInfo_ArtsDaten$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo_ArtsDaten$grid,siteIndex_linetransects$grid)]
 summary(siteInfo_ArtsDaten$siteIndex_All)
 siteInfo_ArtsDaten <- plyr::arrange(siteInfo_ArtsDaten,siteIndex_All)
@@ -375,6 +375,9 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
 bugs.data$n.covs <- ncol(bugs.data$occDM)
 bugs.data$n.preds <- dim(bugs.data$predDM)[1]
 
+
+#saveRDS(bugs.data, file="data/bugs.data_ArtsDaten.rds")
+
 ### fit model #################################################
 
 library(rjags)
@@ -382,7 +385,8 @@ library(jagsUI)
 
 params <- c("int.d","beta","g",
             "b.group.size","meanESW",
-            "meanDensity","Density",
+            "meanDensity","Density.jt",
+            "Density",
             "fit","fit.new",
             "NuIndivs.j","NuIndivs.new.j","exp.j")
 
