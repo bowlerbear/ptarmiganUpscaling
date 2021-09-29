@@ -67,15 +67,16 @@ sum(tlDF$length==0)
 #   summarise(nuYears = sum(!is.na(totalsInfo))) %>%
 #   arrange(nuYears) %>%
 #   filter(nuYears <5)
-#15 lines
+#15 line
 
 ### get environ data #################################################
 
 bufferData <- readRDS(paste(myfolder,
                             "varDF_allEnvironData_buffers_idiv.rds",sep="/"))
-nrow(tlDF)
+bufferData <- subset(bufferData, !LinjeID %in% 
+                       c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339,1925))
+
 tlDF <- subset(tlDF, LinjeID %in% bufferData$LinjeID)
-nrow(tlDF)
 
 siteInfo_ArtsDaten <- readRDS(paste(myfolder,
                                     "siteInfo_ArtsDaten.rds",sep="/"))
@@ -124,6 +125,7 @@ allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$LinjeID,
 allDetections$admN <- siteInfo$admN[match(allDetections$LinjeID,
                                                     siteInfo$LinjeID)]
 
+#add on admN index
 siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrouped,
                                                       siteInfo$adm)]
   
@@ -379,10 +381,10 @@ library(rjags)
 library(jagsUI)
 
 params <- c("int.d","beta","g",
+            "b.group.size","meanESW",
             "meanDensity","Density",
             "fit","fit.new",
-            "NuIndivs.j","NuIndivs.new.j","exp.j",
-            "random.d.line")
+            "NuIndivs.j","NuIndivs.new.j","exp.j")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
