@@ -1,0 +1,49 @@
+
+model{
+
+  #intercept
+  int.d ~ dnorm(0,0.001)    
+  
+  #covariate effects
+  beta1 ~ dnorm(0,0.01)
+  beta2 ~ dnorm(0,0.01)
+  
+  r ~ dunif(0,50)
+  
+  for(i in 1:N){
+      
+      y[i] ~ dnegbin(p[i],r)
+      
+      p[i] <- r/(r+expNuIndivs[i])
+
+      log(expNuIndivs[i]) <- int.d + beta1*cov1[i]
+
+    }
+  
+  #calculate the Bayesian p-value
+  e <- 0.0001
+  
+  for(i in 1:N){
+      
+      #Discrepancy
+      exp1[i] <- r/p[i]
+      exp2[i] <- (p[i] * r)/(1-p[i])
+      exp3[i] <- (r*(1-p[i]))/p[i]
+      
+      #compared to data
+      chi2[i] <- pow((y[i] - exp1[i]),2) / (sqrt(exp1[i])+e)
+      
+      #New samples
+      #compared to simulated values
+      y.new[i] ~ dnegbin(p[i],r)
+      
+      chi2.new[i] <- pow((y.new[i] - exp1[i]),2) / (sqrt(exp1[i])+e) 
+      
+  }
+  
+  
+    fit <- sum(chi2[])                     
+    fit.new <- sum(chi2.new[])             
+  
+}
+
