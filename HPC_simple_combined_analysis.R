@@ -10,6 +10,11 @@ out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rd
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
 
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_1.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_2.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_3.rds")
+
+
 #extract part of output we want
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
@@ -23,10 +28,9 @@ out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_2.rds")
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 
-#poisson
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_1.rds")
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_2.rds")
-out1 <- readRDS("model-outputs/SLURM/distanceModel/poisson/outSummary_linetransectModel_variables_3.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_1.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_2.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_3.rds")
 
 
 #extract part of output we want
@@ -35,6 +39,9 @@ out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("Density",out1$Param))
 predsDensity <- subset(preds,!grepl("meanDensity",preds$Param))
 head(predsDensity)
+
+predsDensity$grid <- siteInfo_ArtsDaten$grid
+predsDensity <- arrange(predsDensity,grid)
 
 ### combine data #########################################
 
@@ -102,6 +109,24 @@ ggplot(ggd)+
   theme_few()+
   ylab("Probability density") + xlab("Total population size estimate")
 
+#### geom ridge ########################################
+
+library(ggridges)
+
+ggd1 <- ggd
+ggd1$Model <- "Gaussian priors"
+ggd2 <- ggd 
+ggd2$Model <- "LASSO priors"
+ggd3 <- ggd
+ggd3$Model <- "Variable indicator priors"
+
+
+all_ggd <- rbind(ggd1,ggd2,ggd3)
+
+ggplot(all_ggd, aes(x = value, y = Model)) + geom_density_ridges2()+
+  theme_minimal()+xlab("Total population size")
+
+quantile(ggd$value,c(0.025,0.5,0.975))
 ### compare #############################################
 
 summary(ggd$value)
@@ -136,3 +161,70 @@ quantile(ggd$value,c(0.025,0.5,0.975))
 #with a Poisson model
 #c 1 million
 
+#with full random adm model
+
+#model 1
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#1048663 1073020 1080751 1081351 1089259 1117990 
+#quantile(ggd$value,c(0.025,0.5,0.975))
+#2.5%     50%   97.5% 
+#1059141 1080751 1105082
+
+#model 2
+#summary(ggd$value)
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#1046279 1066540 1076615 1076669 1086662 1115896 
+#quantile(ggd$value,c(0.025,0.5,0.975))
+#2.5%     50%   97.5% 
+#1052550 1076615 1103255
+
+#model 3
+#summary(ggd$value)
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#1015647 1045521 1053592 1053198 1061058 1091031 
+#quantile(ggd$value,c(0.025,0.5,0.975))
+#2.5%     50%   97.5% 
+#1029577 1053592 1073368 
+
+#### occu vs abund #####
+
+library(ggplot2)
+
+summary(modelPredictions$density_mean)
+
+pairs(modelPredictions)
+
+ggplot(modelPredictions,aes(x = occ_mean, y = density_mean))+
+  geom_point(method="gam")+
+  stat_smooth()
+
+cor.test(modelPredictions$occ_mean, modelPredictions$density_mean)
+#slightly negative???
+
+#limit to sites with line transects
+modelPredictions$grid <- siteInfo_ArtsDaten$grid
+modelPredictions_subset <- subset(modelPredictions, grid %in% siteIndex_linetransects$grid)
+cor.test(modelPredictions_subset$occ_mean, modelPredictions_subset$density_mean)
+ggplot(modelPredictions_subset,aes(x = occ_mean, y = density_mean))+
+  geom_point(method="gam")+
+  stat_smooth()
+
+#density in areas predicted to be occupied
+modelPredictions_high <- subset(modelPredictions, occ_mean>0.9)
+nrow(modelPredictions_high)
+summary(modelPredictions_high$density_mean)
+#or now
+modelPredictions_low <- subset(modelPredictions, occ_mean<0.1)
+nrow(modelPredictions_low)
+summary(modelPredictions_low$density_mean)
+
+
+#relationship after correction
+modelPredictions$estAbund <- modelPredictions$occ_mean * modelPredictions$density_mean
+ggplot(modelPredictions,aes(x = occ_mean, y = estAbund))+
+  geom_point(method="gam")+
+  stat_smooth()
+
+#long-way to get total density
+#number of occupied grids
+sum(modelPredictions$occ_mean) * mean(modelPredictions$density_mean)
