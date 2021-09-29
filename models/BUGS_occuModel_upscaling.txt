@@ -3,15 +3,20 @@
 
   # State model
   for (i in 1:nsite){ 
+  
     for (t in 1:nyear){
     
       z[i,t] ~ dbern(muZ[i,t]) 
       
       logit(muZ[i,t]) <- int.alpha + inprod(beta[],occDM[i,]) + 
                           random.adm[adm[i]] + 
-                          random.year[t] 
-      
+                          eta[i]+
+                          random.year[t]+
+                          random.admyear[adm[i],t] 
     }
+    
+      muZ.i[i] <- mean(muZ[i,])
+  
   }   
   
   ### Observation Model
@@ -22,6 +27,10 @@
     #detection model:
       logit(p[j]) <-  int.d + 
                       beta.effort * Effort[j] +
+                      beta.effort2 * Effort2[j] +
+                      beta.det.open * det.open[j] +
+                      beta.det.bio * det.bio[j] +
+                      beta.det.tlp * det.tlp[j] +
                       random.det.year[year[j]] +
                       random.det.adm[det.adm[j]]
                       
@@ -29,7 +38,13 @@
     #Create simulated dataset to calculate the Bayesian p-value
     y.sim[j] ~ dbern(Py[j]) #data is Y
                       
-    } 
+    }
+  
+  #summary variables for reporting
+  #average detection prob
+  average.p <- mean(p)
+  average.psi <- mean(muZ.i)
+  propOcc <- sum(muZ.i)/nsite 
   
   #get mean z without year effect
   for (i in 1:nsite){ 
@@ -92,17 +107,18 @@
     
     #years
     for(t in 1:nyear){
-      random.year[t] ~ dnorm(0, tau.a)
+      random.year[t] ~ dnorm(0, tau.year)
     }
-    tau.a <- 1/(sd.a * sd.a)
-    sd.a ~ dt(0, pow(2.5,-2), 1)T(0,)
+    tau.year <- 1/(sd.year * sd.year)
+    sd.year ~ dt(0, pow(2.5,-2), 1)T(0,)
     
     #site effects
-    #for (i in 1:nsite) {
-    #  eta[i] ~ dnorm(0, tau2)       
-    #} 
-    #tau2 <- 1/(sigma2 * sigma2) 
-    #sigma2 ~ dt(0, pow(2.5,-2), 1) 
+    for (i in 1:nsite) {
+      eta[i] ~ dnorm(0, tau.eta)       
+    } 
+    tau.eta <- 1/(sigma.eta * sigma.eta) 
+    sigma.eta ~ dt(0, pow(2.5,-2), 1)T(0,) 
+
 
     #adm effects
     for(i in 1:n.adm){
@@ -110,6 +126,16 @@
     }
     random.adm.tau <- pow(random.adm.sd,-2)
     random.adm.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    
+    
+    #adm year effects
+    for(i in 1:n.adm){
+      for(t in 1:nyear){
+        random.admyear[i,t] ~ dnorm(0,random.admyear.tau)
+      }
+    }
+    random.admyear.tau <- pow(random.admyear.sd,-2)
+    random.admyear.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
 
     #Observation model priors
     ##########################
@@ -124,8 +150,11 @@
     sd.lp ~ dt(0, pow(2.5,-2), 1)T(0,) 
     
     #covariate effects
+    beta.det.tlp ~ dnorm(0,0.01)
     beta.det.open ~ dnorm(0,0.01)
+    beta.det.bio ~ dnorm(0,0.01)
     beta.effort ~ dnorm(0,0.01)
+    beta.effort2 ~ dnorm(0,0.01)
     
     #adm effects
     for(i in 1:n.adm){
