@@ -53,25 +53,43 @@
     #intercept
     int.d ~ dnorm(0,0.001)    
     
-    #random line effect - all lines
+    #random grid mapping effect
     line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
     line.d.tau <- pow(line.d.sd,-2)
     for(j in 1:nsiteAll){
       random.d.line[j] ~ dnorm(0,line.d.tau)
     }
     
-    #random line effect
+    #random line effect (limited to line transects)
     #line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
     #line.d.tau <- pow(line.d.sd,-2)
     #for(j in 1:nsite){
     #  random.d.line[j] ~ dnorm(0,line.d.tau)
     #}
     
+    #random year/line effect (grid-level)
+    yearline.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    yearline.d.tau <- pow(yearline.d.sd,-2)
+    for(j in 1:nsiteAll){
+      for(t in 1:nyear){
+        random.d.yearline[j,t] ~ dnorm(0,yearline.d.tau)
+      }
+    }
+    
     #random adm effect
     adm.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
     adm.d.tau <- pow(adm.d.sd,-2)
     for(j in 1:nadm){
       random.d.adm[j] ~ dnorm(0,adm.d.tau)
+    }
+    
+    #random year/adm effect
+    yearadm.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    yearadm.d.tau <- pow(yearadm.d.sd,-2)
+    for(j in 1:nadm){
+      for(t in 1:nyear){
+        random.d.yearadm[j,t] ~ dnorm(0,yearadm.d.tau)
+      }
     }
     
     #random year effect
@@ -113,27 +131,35 @@
                             random.d.year[t] +
                             inprod(beta[],occDM[j,]) +
                             random.d.adm[adm[j]] + 
-                            random.d.line[siteAll[j]] 
+                            random.d.line[siteAll[j]] +
+                            random.d.yearline[siteAll[j],t]+
+                            random.d.yearadm[adm[j],t]
                             
-                            
-
     }}
     
     #predict observations - original scale and density scale
     for(j in 1:nsite){
       meanDensity[j] <- mean(Density.jt[j,])
+      meanESW[j] <- mean(predESW[j,])
       
     }
   
     #mean density at grids across Norway
     for(j in 1:n.preds){
-    
-      #for each grid
-      log(Density.km[j]) <- int.d + 
-                            inprod(beta[],predDM[j,]) + 
-                            random.d.adm[pred.adm[j]]+
-                            random.d.line[j]
+      for(t in 1:nyear){
       
+      #for each grid
+      log(Density.km.jt[j,t]) <- int.d + 
+                            inprod(beta[],predDM[j,]) + 
+                            random.d.adm[pred.adm[j]] +
+                            random.d.line[j] +
+                            random.d.year[t] +
+                            random.d.yearline[j,t]+
+                            random.d.yearadm[pred.adm[j],t]
+                            
+      }
+      
+      Density.km[j] <- mean(Density.km.jt[j,])#mean per year
       Density[j] <- Density.km[j]*25 # since there are 25 km per grid
     }
 
@@ -147,6 +173,7 @@
 
         #expected value of model
         exp[j,t] <- (r*(1-p[j,t]))/p[j,t]
+        
         #New samples
         NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
         
