@@ -176,8 +176,10 @@ folds <- sb$foldID
 length(folds)
 
 #plot the folds
-siteInfo$folds <- sb$foldID
-ggplot2::qplot(x, y, data=siteInfo, colour=factor(folds))
+siteInfo$folds <- factor(sb$foldID)
+g1 <- ggplot2::qplot(x, y, data=siteInfo, colour=folds)+
+  theme_bw()
+g1
 
 #random
 saveRDS(siteInfo[,c("grid","siteIndex","folds")],
