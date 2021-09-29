@@ -25,8 +25,8 @@ resampleOcc <- function(modelPredictions,focalGrid){
   focalDensity <- modelPredictions$density_mean[focalGrid]
     
   totalNu <- as.numeric()
-  for(i in 1:100){
-    newOccSample <- rnorm(1,modelPredictions$occ_mean,modelPredictions$occ_sd)
+  for(i in 1:1000){
+    newOccSample <- rnorm(1,modelPredictions$occ_mean[focalGrid],modelPredictions$occ_sd[focalGrid])
     totalNu[i] <- sum(nonfocalDensity,newOccSample*focalDensity)
   }
   
@@ -43,6 +43,20 @@ qplot(x,y, data=sensitivityOcc, colour = meanPop)+ scale_colour_viridis_c()
 qplot(x,y, data=sensitivityOcc, colour = sdPop)+ scale_colour_viridis_c()
 qplot(x,y, data=modelPredictions, colour = occ_sd)+ scale_colour_viridis_c()
 
+#using tmap - run start of modelSummaries.R
+mygrid[] <- NA
+mygrid[varDF$grid] <- sensitivityOcc$sdPop
+crs(mygrid) <- equalM
+t1 <- tm_shape(mygrid)+ tm_raster(title="Occupancy SD",palette="Spectral",
+                                  style="cont", breaks=c(0,50,75,100,125,150))
+
+
+modelPredictions$sdPop <- sensitivityOcc$sdPop
+qplot(occ_mean, occ_sd, data=modelPredictions,colour=log(sdPop))+ 
+  scale_colour_viridis_c()
+qplot(occ_mean, occ_sd, data=subset(modelPredictions,log(sdPop)>3.9),colour=log(sdPop))+ 
+  scale_colour_viridis_c()
+
 #abundance model
 resampleDensity <- function(modelPredictions,focalGrid){
   
@@ -50,8 +64,8 @@ resampleDensity <- function(modelPredictions,focalGrid){
   focalOcc<- modelPredictions$occ_mean[focalGrid]
   
   totalNu <- as.numeric()
-  for(i in 1:100){
-    newDensitySample <- rnorm(1,modelPredictions$density_mean,modelPredictions$density_sd)
+  for(i in 1:1000){
+    newDensitySample <- rnorm(1,modelPredictions$density_mean[focalGrid],modelPredictions$density_sd[focalGrid])
     totalNu[i] <- sum(nonfocalDensity,newDensitySample*focalOcc)
   }
   
@@ -68,6 +82,13 @@ qplot(x,y, data=sensitivityDensity, colour = meanPop)+ scale_colour_viridis_c()
 qplot(x,y, data=sensitivityDensity, colour = sdPop)+ scale_colour_viridis_c()
 qplot(x,y, data=modelPredictions, colour = density_sd)+ scale_colour_viridis_c()
 
+#using tmap - run start of modelSummaries.R
+mygrid[] <- NA
+mygrid[varDF$grid] <- sensitivityDensity$sdPop
+crs(mygrid) <- equalM
+t2 <- tm_shape(mygrid)+ tm_raster(title="Density SD  ",palette="Spectral", 
+                                  style="cont", breaks=c(0,50,75,100,125,150))
+
 #check relationships with model predictions
 modelPredictions$densitySens <- sensitivityDensity$sdPop
 modelPredictions$occSens <- sensitivityOcc$sdPop
@@ -77,10 +98,7 @@ qplot(occ_mean,occSens, data=modelPredictions)
 qplot(density_mean,densitySens, data=modelPredictions)
 qplot(occ_sd,occSens, data=modelPredictions)
 qplot(density_sd,densitySens, data=modelPredictions)
-
-#other possibilities???
-#the above asks the consequences of the model uncertainty
-#refit the model and get different best estimates for each grid
+qplot(occSens,densitySens, data=modelPredictions)
 
 #analyse the uncertainty as a function of land-use variables and density and occupancy estimates??
 hist(modelPredictions$densitySens)
@@ -88,8 +106,86 @@ summary(lm(densitySens ~ density_mean, data = modelPredictions))#higher density,
 hist(modelPredictions$occSens)
 summary(lm(occSens ~ occ_mean, data = modelPredictions))#higher occupancy, lower the sensitivity
 
-### occupancy only #############################################
+#combine the two
+sensitivityDensity$both <- sensitivityDensity$sdPop * sensitivityOcc$sdPop
+qplot(x,y, data=sensitivityDensity, colour = both)+ scale_colour_viridis_c()
 
+#or by simulation
+resampleBoth<- function(modelPredictions,focalGrid){
+  
+  nonfocalDensity <- modelPredictions$occ_mean[-focalGrid]*modelPredictions$density_mean[-focalGrid]
+  totalNu <- as.numeric()
+  
+  for(i in 1:1000){
+    newDensitySample <- rnorm(1,modelPredictions$density_mean[focalGrid],modelPredictions$density_sd[focalGrid])
+    newOccSample <- rnorm(1,modelPredictions$occ_mean[focalGrid],modelPredictions$occ_sd[focalGrid])
+    totalNu[i] <- sum(nonfocalDensity,newDensitySample*newOccSample)
+  }
+  
+  data.frame(grid=focalGrid,meanPop=mean(totalNu),medianPop=median(totalNu),sdPop=sd(totalNu))
+}
+
+sensitivityBoth <- 1:nrow(modelPredictions) %>%
+  map_dfr(~resampleBoth(modelPredictions,focalGrid=.x))
+sensitivityBoth$x <- varDF$x
+sensitivityBoth$y <- varDF$y
+qplot(x,y, data=sensitivityBoth, colour = sdPop)+ scale_colour_viridis_c()
+
+#using tmap - run start of modelSummaries.R
+mygrid[] <- NA
+mygrid[varDF$grid] <- sensitivityBoth$sdPop
+crs(mygrid) <- equalM
+t3 <- tm_shape(mygrid)+ tm_raster(title="Both SD     ",palette="Spectral", 
+                                  style="cont", breaks=c(0,50,75,100,125,150))
+
+#combine all
+tmaptools::palette_explorer()
+tmap_arrange(t1,t2,nrow=1)
+
+median(sensitivityDensity$sdPop)
+median(sensitivityOcc$sdPop)
+
+### simulate all grids #######################################
+
+#just abundance
+totalNu <- as.numeric()
+
+for(i in 1:1000){
+  
+  newDensitySample <- rnorm(nrow(modelPredictions),modelPredictions$density_mean,modelPredictions$density_sd)
+  totalNu[i] <- sum(newDensitySample*modelPredictions$occ_mean)
+  
+}
+data.frame(grid=focalGrid,meanPop=mean(totalNu),medianPop=median(totalNu),sdPop=sd(totalNu))
+
+
+#just occupancy
+totalNu <- as.numeric()
+
+for(i in 1:1000){
+  
+  newOccSample <- rnorm(nrow(modelPredictions),modelPredictions$occ_mean,modelPredictions$occ_sd)
+  totalNu[i] <- sum(modelPredictions$density_mean*newOccSample)
+  
+}
+data.frame(grid=focalGrid,meanPop=mean(totalNu),medianPop=median(totalNu),sdPop=sd(totalNu))
+
+
+#both density and occupancy
+totalNu <- as.numeric()
+
+for(i in 1:1000){
+  
+newDensitySample <- rnorm(nrow(modelPredictions),modelPredictions$density_mean,modelPredictions$density_sd)
+newOccSample <- rnorm(nrow(modelPredictions),modelPredictions$occ_mean,modelPredictions$occ_sd)
+totalNu[i] <- sum(newDensitySample*newOccSample)
+
+}
+data.frame(grid=focalGrid,meanPop=mean(totalNu),medianPop=median(totalNu),sdPop=sd(totalNu))
+
+
+### occupancy only #############################################
+ 
 tempDF$fitsL <- predict(glm1,type="link",newdata=tempDF)
 tempDF$fitsL.se <- predict(glm1,type="link",newdata=tempDF,se.fit=TRUE)$se.fit
 
