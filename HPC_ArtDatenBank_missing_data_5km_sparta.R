@@ -34,13 +34,16 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 ### listlength #####################################################
 
-#source('formattingArtDatenBank_missing_data.R')
+#source('formattingArtDatenBank_missing_data_iDiv.R')
 
 #read in list length object (made on the Rstudio server)
 listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
 
 #subset to May to September
 listlengthDF <- subset(listlengthDF,is.na(month)|(month > 4 & month <10))
+
+#2008 to 2017....
+listlengthDF <- subset(listlengthDF, Year>2007 & Year <=2017) 
 
 ### subset ##########################################################
 
@@ -51,18 +54,20 @@ varDF <- readRDS(paste(myfolder,"varDF_allEnvironData_5km_idiv.rds",sep="/"))
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
 
-### effort ######################################################################
-
-#we will treat it as a categorical variable
-table(listlengthDF$L)
-listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
-
 ### Absences ###################################################################
 
 #the dataset contains missing values
 
 listlengthDF$L[is.na(listlengthDF$L)] <- 1 #set to nominal effort
 #listlengthDF$y[listlengthDF$L==0] <- 0
+table(is.na(listlengthDF$y))
+
+### effort ######################################################################
+
+#we will treat it as a categorical variable
+table(listlengthDF$L)
+listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
+listlengthDF$short <- ifelse(listlengthDF$L %in% c(2:4),1,0)
 
 ### indices #####################################################################
 
@@ -75,9 +80,6 @@ listlengthDF <- arrange(listlengthDF,siteIndex,yearIndex)
 names(listlengthDF)[which(names(listlengthDF)=="y")] <- "species"
 listlengthDF <- merge(listlengthDF,varDF,by="grid",all.x=T)
 
-#have missing singletons as 1
-listlengthDF$singleton[is.na(listlengthDF$singleton)] <- 1
-
 ### adm inidices #############################################################
 
 listlengthDF$admN <- as.numeric(factor(listlengthDF$adm))
@@ -89,6 +91,33 @@ siteInfo_ArtsDaten <- siteInfo
 #saveRDS(siteInfo,
 #        file = "data/siteInfo_ArtsDaten.rds")
 
+
+### data summary ##############################################################
+
+length(unique(listlengthDF$grid))
+# 
+# listlengthDF_obs <- subset(listlengthDF, !is.na(species))
+# length(unique(listlengthDF_obs$grid))
+# 
+# listlengthDF_posobs <- subset(listlengthDF, species==1)
+# length(unique(listlengthDF_posobs$grid))
+# 
+# #when a ptarmigan was observed at a grid - how many times was it seen there
+# ptarmiganGrids <- listlengthDF_posobs %>%
+#                   group_by(grid) %>%
+#                   summarise(nuVisits = length(unique(visit)),
+#                             nuYears = length(unique(year)))
+# summary(ptarmiganGrids$nuVisits)
+# summary(ptarmiganGrids$nuYears)
+# 
+# #how often was a grid surveyed
+# visitGrids <- listlengthDF_obs %>%
+#   group_by(grid) %>%
+#   summarise(nuVisits = length(unique(visit)),
+#             nuYears = length(unique(year)))
+# summary(visitGrids$nuVisits)
+# summary(visitGrids$nuYears)
+
 ### BUGS object ################################################################
 
 #for BUGS
@@ -98,12 +127,16 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   nvisit = nrow(listlengthDF),
                   site = listlengthDF$siteIndex,
                   year = listlengthDF$yearIndex,
-                  Effort = listlengthDF$singleton,
                   y = listlengthDF$species,#includes NAs
+                  #detection covariates
+                  Effort = listlengthDF$singleton,
+                  Effort2 = listlengthDF$short,
+                  det.tlp = listlengthDF$tree_line_position/1000,
+                  det.open = listlengthDF$Open,
+                  det.bio = listlengthDF$bio5/100,
                   #add an adm effect
                   adm = siteInfo$admN,
                   det.adm = listlengthDF$admN,
-                  det.open = listlengthDF$Open,
                   n.adm = length(unique(siteInfo$admN)),#19
                   adm2 = siteInfo$admN2,
                   det.adm2 = listlengthDF$admN2,
@@ -129,9 +162,6 @@ zst <- reshape2::acast(listlengthDF, siteIndex~yearIndex, value.var="species",
 zst [is.infinite(zst)] <- 0
 inits <- function(){list(z = zst)}
 
-#saveRDS(zst,file="data/zst_ArtsDaten.rds")
-
-
 ### bpv index ##############################################
 
 #for each i, sum into t
@@ -148,8 +178,9 @@ bugs.data$StrIdx <- StrIdx
 nrow(varDF)#11788
 #sampled grid
 nrow(siteInfo)#11788
+names(siteInfo)[1:12]
 
-siteInfo[,-c(1:11)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:11)])
+siteInfo[,-c(1:12)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:12)])
 
 ### choose model ##############################################
 
@@ -222,8 +253,11 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 
 ### fit model ########################################################
 
-params <- c("mean.p","beta","g","beta.effort",
-            "beta.det.open","grid.z","grid.psi")
+params <- c("beta","g",
+            "average.p","average.psi","propOcc",
+            "beta.effort","beta.effort2",
+            "beta.det.open","beta.det.bio","beta.det.tlp",
+            "grid.z","grid.psi")
 
 #chosen already earlier
 #modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
