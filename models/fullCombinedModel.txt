@@ -1,0 +1,383 @@
+
+  model{
+
+  #################
+  #Occupancy model#
+  #################
+
+  # State model
+  for (i in 1:nsiteCT){ 
+  
+    for (t in 1:nyearCT){
+    
+      z[i,t] ~ dbern(muZ[i,t]) 
+      
+      logit(muZ[i,t]) <- int.alphaCT + inprod(betaCT[],occDMCT[i,]) + 
+                          random.admCT[admCT[i]] + 
+                          etaCT[i]+
+                          random.yearCT[t]+
+                          random.admyearCT[admCT[i],t] 
+    }
+    
+      muZ.i[i] <- mean(muZ[i,])
+  
+  }   
+  
+  ### Observation Model
+  for(j in 1:nvisit) {
+    yCT[j] ~ dbern(Py[j]) #data is Y
+    Py[j]<- z[site[j],year[j]]*p[j] 
+
+    #detection model:
+      logit(p[j]) <-  int.dCT + 
+                      beta.effortCT * EffortCT[j] +
+                      beta.effort2CT * Effort2CT[j] +
+                      beta.det.openCT * det.openCT[j] +
+                      beta.det.bioCT * det.bioCT[j] +
+                      beta.det.tlpCT * det.tlpCT[j] +
+                      random.det.yearCT[yearCT[j]] +
+                      random.det.admCT[det.admCT[j]]
+                      
+                      
+    #Create simulated dataset to calculate the Bayesian p-value
+    y.sim[j] ~ dbern(Py[j]) #data is Y
+                      
+    }
+  
+  #summary variables for reporting
+  #average detection prob
+  average.p <- mean(p)
+  average.psi <- mean(muZ.i)
+  propOcc <- sum(muZ.i)/nsite 
+  
+  #get mean z without year effect
+  for (i in 1:nsiteCT){ 
+      grid.z[i] <- sum(z[i,])/nyear
+      grid.psi[i] <- sum(muZ[i,])/nyear
+  } 
+  
+  #get mid years psi and z
+  for(i in 1:nsiteCT){
+    mid.z[i] <- z[i,6]
+    mid.psi[i] <- muZ[i,6]
+  }
+  
+  #Bayesian p-value:
+  e <- 0.0001
+  #get expected number of detection per site 
+    for(t in 1:nyearCT){
+    
+        for(j in 1:nvisitCT){
+        
+          #expected count based on model fit
+          exp.idx[j,t] <- Py[j] * StrIdxCT[j,t]     
+          
+          #using simulated data
+          sim.idx[j,t] <- y.sim[j] * StrIdxCT[j,t]
+          
+          obs.idx[j,t] <- y[j] * StrIdxCT[j,t]
+              
+        }
+        
+    e.count[t] <- sum(exp.idx[,t])
+    sim.count[t] <- sum(sim.idx[,t])
+    obs.count[t] <- sum(obs.idx[,t])
+      
+    # Chi-square discrepancy for the actual data
+    chi2CT[t] <- pow((obs.count[t] - e.count[t]),2) / (e.count[t]+e)
+    
+    # Chi-square discrepancy for the simulated ('perfect') data
+    chi2.simCT[t] <- pow((sim.count[t] - e.count[t]),2) / (e.count[t]+e)
+    
+    }
+    
+    # Add up individual chi2 values for overall fit statistic
+    fitCT <- sum(chi2CT)  
+    fit.newCT <- sum(chi2.simCT)       
+      
+
+  #Priors 
+
+  # State model priors
+    ############################
+    
+    #intercept
+    mean.psi ~ dunif(0, 1)       
+    int.alphaCT <- logit(mean.psi)
+ 
+    for(i in 1:n.covsCT){
+      betaCT[i] ~ dnorm(0,0.01)
+    }
+    
+    #years
+    for(t in 1:nyearCT){
+      random.yearCT[t] ~ dnorm(0, tau.yearCT)
+    }
+    tau.yearCT <- 1/(sd.yearCT * sd.yearCT)
+    sd.yearCT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    
+    #site effects
+    for (i in 1:nsiteCT) {
+      etaCT[i] ~ dnorm(0, tau.etaCT)       
+    } 
+    tau.etaCT <- 1/(sigma.etaCT * sigma.etaCT) 
+    sigma.etaCT ~ dt(0, pow(2.5,-2), 1)T(0,) 
+
+
+    #adm effects
+    for(i in 1:n.admCT){
+      random.admCT[i] ~ dnorm(0,random.adm.tauCT)
+    }
+    random.adm.tauCT <- pow(random.adm.sdCT,-2)
+    random.adm.sdCT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    
+    
+    #adm year effects
+    for(i in 1:n.admCT){
+      for(t in 1:nyearCT){
+        random.admyearCT[i,t] ~ dnorm(0,random.admyear.tauCT)
+      }
+    }
+    random.admyear.tauCT <- pow(random.admyear.sdCT,-2)
+    random.admyear.sdCT ~ dt(0, pow(2.5,-2), 1)T(0,)
+
+    #Observation model priors
+    ##########################
+    
+    mean.p ~ dunif(0, 1)        
+    int.dCT <- logit(mean.p)
+    
+    #year effects
+    for (t in 1:nyearCT) {
+      random.det.yearCT[t] ~ dnorm(0, tau.lpCT)            
+    }
+    tau.lpCT <- 1 / (sd.lpCT * sd.lpCT)                 
+    sd.lpCT ~ dt(0, pow(2.5,-2), 1)T(0,) 
+    
+    #covariate effects
+    beta.det.tlpCT ~ dnorm(0,0.01)
+    beta.det.openCT ~ dnorm(0,0.01)
+    beta.det.bioCT ~ dnorm(0,0.01)
+    beta.effortCT ~ dnorm(0,0.01)
+    beta.effort2CT ~ dnorm(0,0.01)
+    
+    #adm effects
+    for(i in 1:n.admCT){
+      random.det.admCT[i] ~ dnorm(0,random.det.adm.tauCT)
+    }
+    random.det.adm.tauCT <- pow(random.adm.sdCT,-2)
+    random.det.adm.sdCT ~ dt(0, pow(2.5,-2), 1)T(0,) 
+
+    #################
+    #Distance model#
+    #################
+    
+    pi <- 3.141593
+    
+    # priors for fixed effect parms for half-normal detection parm sigma
+    b.df.0 ~ dunif(0,20)        
+    b.group.size ~ dnorm(0,0.01) # standard deviation of 10
+    
+    #adm random effect on detection
+    for(i in 1:nadmLT){
+      b.admLT[i] ~ dnorm(0,b.adm.tauLT)
+    }
+    b.adm.sdLT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    b.adm.tauLT <- pow(b.adm.sdLT,-2)
+    
+    for(i in 1:ndetectionsLT){
+    
+    #linear predictor
+    mu.df[i] <- b.df.0 + b.group.size * ln_GroupSizeLT[i] + b.admLT[detectionAdmLT[i]]
+    
+    # estimate of sd and var, given coeffs above
+    sig.df[i] <- exp(mu.df[i])
+    sig2.df[i] <- sig.df[i]*sig.df[i]
+    
+    # effective strip width
+    esw[i] <- sqrt(pi * sig2.df[i] / 2) 
+    f0[i] <- 1/esw[i] #assuming all detected on the line
+    
+    # LIKELIHOOD
+    # using zeros trick
+    L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
+    nlogL.f0[i] <-  -log(L.f0[i])
+    zeros.dist[i] ~ dpois(nlogL.f0[i])
+    }
+
+    #using this model and predicted group size (below), get predicted ESW 
+    for(t in 1:nyear){
+      for(j in 1:nsite){
+        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(GroupSizesLT[j,t]+1) + b.admLT[admLT[j]]) 
+        pred.sig2[j,t] <- pow(pred.sig[j,t],2)
+        predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
+      }
+    }
+
+    ########################
+    #Model of total density#
+    ########################
+
+    #intercept
+    int.dLT ~ dnorm(0,0.001)    
+    
+    #random grid mapping effect
+    line.d.sdLT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    line.d.tauLT <- pow(line.d.sdLT,-2)
+    for(j in 1:nsiteAllLT){
+      random.d.lineLT[j] ~ dnorm(0,line.d.tauLT)
+    }
+    
+    #random year/line effect (grid-level)
+    yearline.d.sdLT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    yearline.d.tauLT <- pow(yearline.d.sdLT,-2)
+    for(j in 1:nsiteAllLT){
+      for(t in 1:nyearLT){
+        random.d.yearlineLT[j,t] ~ dnorm(0,yearline.d.tauLT)
+      }
+    }
+    
+    #random adm effect
+    adm.d.sdLT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    adm.d.tauLT <- pow(adm.d.sdLT,-2)
+    for(j in 1:nadmLT){
+      random.d.admLT[j] ~ dnorm(0,adm.d.tauLT)
+    }
+    
+    #random year/adm effect
+    yearadm.d.sdLT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    yearadm.d.tauLT <- pow(yearadm.d.sdLT,-2)
+    for(j in 1:nadmLT){
+      for(t in 1:nyearLT){
+        random.d.yearadmLT[j,t] ~ dnorm(0,yearadm.d.tauLT)
+      }
+    }
+    
+    #random year effect
+    year.d.sdLT ~ dt(0, pow(2.5,-2), 1)T(0,)
+    year.d.tauLT <- pow(year.d.sdLT,-2)
+    for(t in 1:nyearLT){
+      random.d.yearLT[t] ~ dnorm(0,year.d.tauLT)
+    }
+
+
+    #covariate effects
+    for(i in 1:n.covsLT){
+      betaLT[i] ~ dnorm(0,0.01)
+    }
+
+
+    #Observation model:
+    r ~ dunif(0,50)
+    for(j in 1:nsiteLT){
+      for(t in 1:nyearLT){
+      
+        NuIndivs[j,t] ~ dnegbin(p[j,t],r)
+        
+        p[j,t] <- r/(r+expNuIndivs[j,t])
+        
+        #NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
+        
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
+        
+      }
+    }
+    
+    #State model
+    for(j in 1:nsiteLT){
+      for(t in 1:nyearLT){
+      
+      #linear predictor on density
+        log(Density.jt[j,t]) <- int.dLT + 
+                            random.d.yearLT[t] +
+                            inprod(betaLT[],occDMLT[j,]) +
+                            random.d.admLT[admLT[j]] + 
+                            random.d.lineLT[siteAllLT[j]] +
+                            random.d.yearlineLT[siteAllLT[j],t]+
+                            random.d.yearadmLT[admLT[j],t]
+                            
+    }}
+    
+    #predict observations - original scale and density scale
+    for(j in 1:nsiteLT){
+      meanDensity[j] <- mean(Density.jt[j,])
+      meanESW[j] <- mean(predESW[j,])
+    }
+  
+    #mean density at grids across Norway
+    for(j in 1:n.predsLT){
+      for(t in 1:nyearLT){
+      
+      #for each grid
+      log(Density.km.pred[j,t]) <- int.dLT + 
+                            inprod(betaLT[],predDMLT[j,]) + 
+                            random.d.admLT[pred.admLT[j]] +
+                            random.d.lineLT[j] +
+                            random.d.yearLT[t] +
+                            random.d.yearlineLT[j,t]+
+                            random.d.yearadmLT[pred.admLT[j],t]
+                            
+      }
+      
+      Density.km[j] <- mean(Density.km.pred[j,])#mean per year
+      Density[j] <- Density.km[j]*25 # since there are 25 km per grid
+    }
+
+    #calculate the Bayesian p-value - at the site-level
+    
+    #get expected values per site
+    for(j in 1:nsiteLT){
+      for(t in 1:nyearLT){ 
+
+        #expected value of model
+        exp[j,t] <- (r*(1-p[j,t]))/p[j,t]
+        
+        #New samples
+        NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
+        
+      }
+      exp.j[j] <- mean(exp[j,])
+      NuIndivs.j[j] <- mean(NuIndivs[j,])
+      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])
+    }
+    
+    e <- 0.0001
+    
+    #do discrepancy at the site-level
+    for(j in 1:nsiteLT){
+        
+        #compared to data
+        chi2LT[j] <- pow((NuIndivs.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e)
+        
+        #compared to simulated values
+        chi2.newLT[j] <- pow((NuIndivs.new.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e) 
+      
+    }
+    
+    # Add up discrepancy measures for entire data set
+      fitLT <- sum(chi2LT[])                     
+      fit.newLT <- sum(chi2.newLT[])
+      
+      
+    #get predicted density
+    for (i in 1:nsiteCT){ 
+      for (t in 1:nyearCT){
+        realizedDensity[i,t] <- z[i,t] * Density.km.pred[i,t] * 25
+      }
+    }
+    
+    #mean tot pop per year
+    for (t in 1:nyearCT){
+      annual.population[t] <- sum(realizedDensity[i,])
+    }
+    
+    mean grid per year
+    for (t in 1:nsiteCT){ 
+      grid.population[t] <- mean(realizedDensity[,t])
+    }
+    
+      
+
+  }
+    
+    
