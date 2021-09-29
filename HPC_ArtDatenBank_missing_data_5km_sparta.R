@@ -43,6 +43,7 @@ listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
 listlengthDF <- subset(listlengthDF,is.na(month)|(month > 4 & month <10))
 
 #2008 to 2017....
+listlengthDF$Year <- listlengthDF$year
 listlengthDF <- subset(listlengthDF, Year>2007 & Year <=2017) 
 
 ### subset ##########################################################
@@ -250,6 +251,11 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 # myvars <- c("tree_line_position","tree_line_position_2","geo_y","bio1","bio1_2","Bog",
 #             "Meadows","ODF","OSF","MountainBirchForest")
 
+
+### save objects ####################################################
+
+# saveRDS(bugs.data, file="data/bugs.data_ArtsDaten.rds")
+# saveRDS(zst, file="data/zst_ArtsDaten.rds")
 
 ### fit model ########################################################
 
