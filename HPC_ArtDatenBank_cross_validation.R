@@ -43,6 +43,9 @@ names(listlengthDF)[which(names(listlengthDF)=="y")] <- "species"
 #subset to May to September
 listlengthDF <- subset(listlengthDF,is.na(month)|(month > 4 & month <10))
 
+#2008 to 2017....
+listlengthDF <- subset(listlengthDF, Year>2007 & Year <=2017) 
+
 ### subset ##########################################################
 
 #subset to focal grids and those with environ covariate data
@@ -64,6 +67,7 @@ listlengthDF$admN2 <- as.numeric(factor(listlengthDF$adm2))
 #we will treat it as a categorical variable
 table(listlengthDF$L)
 listlengthDF$singleton <- ifelse(listlengthDF$L==1,1,0)
+listlengthDF$short <- ifelse(listlengthDF$L %in% c(2:4),1,0)
 
 ### Absences ###################################################################
 
@@ -127,14 +131,22 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   site_train = listlengthDF_train$siteIndex,
                   year_test = listlengthDF_test$yearIndex,
                   year_train = listlengthDF_train$yearIndex,
-                  Effort_test = listlengthDF_test$singleton,
-                  Effort_train = listlengthDF_train$singleton,
                   y_test = listlengthDF_test$species,
                   y_train = listlengthDF_train$species,
+                  #detection covariates
+                  Effort_test = listlengthDF_test$singleton,
+                  Effort_train = listlengthDF_train$singleton,
+                  Effort2_test = listlengthDF_test$short,
+                  Effort2_train = listlengthDF_train$short,
+                  det.tlp_test = listlengthDF_test$tree_line_position/1000,
+                  det.tlp_train = listlengthDF_train$tree_line_position/1000,
+                  det.open_test = listlengthDF_test$Open,
+                  det.open_train = listlengthDF_train$Open,
+                  det.bio_test = listlengthDF_test$bio5/100,
+                  det.bio_train = listlengthDF_train$bio5/100,
                   #add an adm effect
                   adm_train = siteInfo_train$admN,
                   det.adm_train = listlengthDF_train$admN,
-                  det.open_train = scale(listlengthDF_train$Open),
                   n.adm_train = length(unique(siteInfo_train$admN)),
                   adm2 = siteInfo$admN2,
                   det.adm2_train = listlengthDF_train$admN2,
