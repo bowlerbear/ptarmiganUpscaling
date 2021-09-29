@@ -45,6 +45,11 @@ out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rd
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
 
+#with detection covariates
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_1.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_2.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_3.rds")
+
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 table(out1$Rhat<1.1)
@@ -59,8 +64,23 @@ plot(mygrid)
 # using tmap package
 crs(mygrid) <- equalM
 occ_tmap <- tm_shape(mygrid)+
-  tm_raster(title="Pr(Occupancy)",palette="YlGnBu")
+  tm_raster(title="Occupancy",palette="YlGnBu", style="cont")
 occ_tmap
+
+#and sd
+siteInfo_Occ$preds <- preds$sd
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+plot(mygrid)
+
+# using tmap package
+crs(mygrid) <- equalM
+occ_tmap_sd <- tm_shape(mygrid)+
+  tm_raster(title="SD",palette="YlGnBu", style="cont")
+occ_tmap_sd
+
+tmap_arrange(occ_tmap,occ_tmap_sd,nrow=1)
+
 
 #psi
 preds <- subset(out1,grepl("grid.psi",out1$Param))
@@ -72,14 +92,31 @@ plot(mygrid)
 # using tmap package
 crs(mygrid) <- equalM
 tm_shape(mygrid)+
-  tm_raster(title="Occupancy prob",palette="YlGnBu")
+  tm_raster(title="Occupancy prob",palette="YlGnBu", style="cont")
+
+
+siteInfo_Occ$preds <- preds$sd
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+plot(mygrid)
+
+# using tmap package
+crs(mygrid) <- equalM
+occ_tmap_sd <- tm_shape(mygrid)+
+  tm_raster(title="SD",palette="YlGnBu", style="cont")
+occ_tmap_sd
+
+tmap_arrange(occ_tmap,occ_tmap_sd,nrow=1)
+
+### summary stats ###########################################
+
+subset(out1,grepl("average",out1$Param))
+subset(out1,grepl("propOcc",out1$Param))
+subset(out1,grepl("beta.",out1$Param))
 
 ### model selection ##########################################
 
 #model 1 - a priori selection
-out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rds")
-out1 <- data.frame(out1)
-out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
 betas <- subset(betas,Param!="beta.det.open")
 betas <- subset(betas,Param!="beta.effort")
@@ -95,9 +132,6 @@ ggplot(betas)+
 
 
 #model 2 = lasso
-out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
-out1 <- data.frame(out1)
-out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
 betas <- subset(betas,Param!="beta.det.open")
 betas <- subset(betas,Param!="beta.effort")
@@ -115,12 +149,9 @@ ggplot(betas)+
              linetype="dashed")
 
 #model 3 = variable indicator
-out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
-out1 <- data.frame(out1)
-out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
-betas <- subset(betas,Param!="beta.det.open")
-betas <- subset(betas,Param!="beta.effort")
+betas <- subset(betas,!grepl("effort",betas$Param))
+betas <- subset(betas,!grepl("det",betas$Param))
 betas$variables <- c("bio6","bio5","tree_line_position","MountainBirchForest","Bog","ODF","Meadows",
                      "OSF","Mire","SnowBeds","y","distCoast",
                      "bio6_2","bio5_2","tree_line_position_2",
@@ -135,12 +166,34 @@ ggplot(betas)+
              linetype="dashed")
 
 
+#inclusion 
+betas <- subset(out1,grepl("g",out1$Param))
+betas <- subset(betas,!grepl("grid",betas$Param))
+betas <- subset(betas,!grepl("average",betas$Param))
+betas$variables <- c("bio6","bio5","tree_line_position","MountainBirchForest","Bog","ODF","Meadows",
+                     "OSF","Mire","SnowBeds","y","distCoast",
+                     "bio6_2","bio5_2","tree_line_position_2",
+                     "MountainBirchForest_2","Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2",
+                     "SnowBeds_2","y_2","distCoast_2")
+ggplot(betas)+
+  geom_crossbar(aes(x=variables,y=mean, ymin=X2.5.,ymax=X97.5.))+
+  coord_flip()+
+  theme_bw()+
+  ylab("Model inclusion")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")
+
 ### BPV #####################################################
 
 #or slurm models
 out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_1.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_2.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_3.rds")
+
+#with detection covariates
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/out_update_occModel_upscaling_1.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/out_update_occModel_upscaling_2.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/out_update_occModel_upscaling_3.rds")
 
 #fit vs fit new
 hist(out1$sims.list$fit.new)
@@ -197,7 +250,10 @@ for (i in 1:nu_Iteractions){
   
   py.vals <- Py_preds$value[Py_preds$Iteration==i]
   
-  pred <- ROCR::prediction(bugs.data$y,py.vals)
+  #remove the NAs
+  missing <- is.na(bugs.data$y)
+  
+  pred <- ROCR::prediction(py.vals[!missing],bugs.data$y[!missing])
   
   #get AUC
   perf <- ROCR::performance(pred, "auc")
@@ -206,45 +262,81 @@ for (i in 1:nu_Iteractions){
 }
 
 summary(AUC_py)
-#doesnt run
 
 ### cross validation #######################################
 
-#model 1
+#standard models
 myfolds <- list.files("model-outputs/SLURM/occModel/CV") %>%
-            str_subset("BUGS_occuModel_upscaling_CV.txt")
-
-#model 3
+            str_subset("BUGS_occuModel_upscaling_CV.txt")#model 1
 myfolds <- list.files("model-outputs/SLURM/occModel/CV") %>%
-  str_subset("BUGS_occuModel_upscaling_ModelSelection_CV.txt")
+  str_subset("BUGS_occuModel_upscaling_ModelSelection_CV.txt")#model 3
 
+#models with detection covariates
+myfolds <- list.files("model-outputs/SLURM/occModel/CV/detection_covariates") %>%
+  str_subset("BUGS_occuModel_upscaling_CV.txt")#model 1
+myfolds <- list.files("model-outputs/SLURM/occModel/CV/detection_covariates") %>%
+  str_subset("BUGS_occuModel_upscaling_LASSO_CV.txt")#model 2
+myfolds <- list.files("model-outputs/SLURM/occModel/CV/detection_covariates") %>%
+  str_subset("BUGS_occuModel_upscaling_ModelSelection_CV.txt")#model 3
 
 temp <- plyr::ldply(1:5,function(x){
-  temp <- readRDS(paste0("model-outputs/SLURM/occModel/CV/",myfolds[x]))
+  temp <- readRDS(paste0("model-outputs/SLURM/occModel/CV/detection_covariates/",myfolds[x]))
   temp$fold.id <- x
   return(temp)
 })
   
-temp %>% 
+model_3 <- temp %>% 
   group_by(fold.id) %>%
   summarise(across(everything(),mean))
-# fold.id AUC_psi_test AUC_psi_train AUC_py_test AUC_py_train
-# 1       1        0.932         0.967       0.614        0.960
-# 2       2        0.970         0.962       0.799        0.956
-# 3       3        0.950         0.966       0.590        0.975
-# 4       4        0.974         0.960       0.894        0.947
-# 5       5        0.946         0.965       0.742        0.952
-                
+
+#with more detection covariates
+#fold.id AUC_psi_test AUC_psi_train AUC_py_test AUC_py_train
+#<int>        <dbl>         <dbl>       <dbl>        <dbl>
+#1       1        0.895         0.902       0.722        0.951
+#2       2        0.891         0.905       0.689        0.955
+#3       3        0.896         0.902       0.708        0.956
+#4       4        0.905         0.890       0.747        0.951
+#5       5        0.904         0.893       0.756        0.947
+
+#satisfactory....
+
+
 temp %>% 
   group_by(fold.id) %>%
   summarise(across(everything(),mean)) %>%
   colMeans()
 
-#need to improve detection model
+
+#plot all
+model_1$model <- "Gaussian priors" 
+model_2$model <- "LASSO priors" 
+model_3$model <- "Variable indicator" 
+allCV <- rbind(model_1,
+               model_2,
+               model_3)
+
+allCV <- allCV %>%
+  pivot_longer(!c("fold.id","model"),
+               names_to = "variable", values_to="value")
+allCV$dataset <- sapply(allCV$variable,function(x)
+  strsplit(x,"_")[[1]][3])
+allCV$parameter <- sapply(allCV$variable,function(x)
+  strsplit(x,"_")[[1]][2])
+allCV$Parameter <- ifelse(allCV$parameter=="psi","Occupancy","Detection")
+
+allCV$model <- factor(allCV$model, levels = c("LASSO priors", "Variable indicator","Gaussian priors"))
+
+ggplot(allCV) +
+  geom_point(aes(x=fold.id,y=value, colour=model))+
+  facet_grid(Parameter~dataset)+
+  theme_bw()+
+  ylab("AUC") + xlab("Fold")
 
 ### DISTANCE models ##########################################
 
 bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
+bufferData <- subset(bufferData, ! LinjeID %in%
+                       c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339,1925))
 
 #slurm model
 
@@ -255,13 +347,20 @@ out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_
 
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 
-#### compare random effects #############################
+#with admyear as a random effect
 
-#get preds of out1 below
-#model with random effects fitted to all 
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_1.rds")
 
-#negative binomial models - restricted line effect (only estimated for lines with data)
-out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/outSummary_linetransectModel_variables_3.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_2.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_3.rds")
+
+### compare models #######################################
+
+#get preds from section below
+
+#compare with limited line transect model
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/outSummary_linetransectModel_variables_1.rds")
 
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
@@ -269,8 +368,31 @@ preds_limited <- subset(out1,grepl("meanDensity",out1$Param))
 
 plot(preds$mean,preds_limited$mean)
 abline(0,1)
-#many correlated but still noise...
-cor(preds$mean,preds_limited$mean)
+
+#compare with limited gridyear model
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_gridyear_random/outSummary_linetransectModel_variables_1.rds")
+
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+preds_limited <- subset(out1,grepl("meanDensity",out1$Param))
+
+plot(preds$mean,preds_limited$mean)
+abline(0,1)
+
+#compare different response formulations
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_grid_transects_random/outSummary_linetransectModel_variables_1.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+preds_grid <- subset(out1,grepl("meanDensity",out1$Param))
+
+#with direct response (and surveyArea as effort term)
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_grid_transects_random/direct_response/outSummary_linetransectModel_variables_1.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+preds_grid_response <- subset(out1,grepl("meanDensity",out1$Param))
+plot(preds_grid$mean,preds_grid_response$mean)
+abline(0,1)
+#same!!!!
 
 ### plot map ##############################################
 
@@ -289,57 +411,45 @@ summary(bufferData$preds)
 #  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #2.882  10.927  12.688  12.920  14.880  24.797
 #model 3
-#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#3.58   11.03   13.02   12.95   15.07   21.90
+#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#2.112   8.620  11.773  12.782  15.871  30.875
 
 #tmap
+
 bufferData_st <- st_as_sf(bufferData,coords=c("x","y"),crs=equalM)
+
+#mean preds
 density_tmap <- tm_shape(NorwayOrigProj)+
   tm_borders()+
 tm_shape(bufferData_st)+
-  tm_dots("preds",title="Est. Density",palette="YlGnBu",size=0.05)+
+  tm_dots("preds",title="Est. Density",
+          palette="YlGnBu",size=0.05, style="cont")+
   tm_layout(legend.position=c("left","top"))
 
-#plot side by side with occupancy
-tmap_arrange(occ_tmap,density_tmap,nrow=1)
+#sd of preds
+density_tmap_sd <- tm_shape(NorwayOrigProj)+
+  tm_borders()+
+  tm_shape(bufferData_st)+
+  tm_dots("predsSD",title="SD",
+          palette="YlGnBu",size=0.05, style="cont")+
+  tm_layout(legend.position=c("left","top"))
 
-#across whole range
+tmap_arrange(density_tmap,density_tmap_sd,nrow=1)
+
+
+#or to the grid
 preds <- subset(out1,grepl("Density",out1$Param))
 preds <- subset(preds,!grepl("meanDensity",preds$Param))
-siteInfo_Occ$density_preds <- preds$mean
-siteInfo_Occ$density_predsSD <- preds$sd
-
-#tmap
+siteInfo_Occ$preds <- preds$mean
 mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$density_preds
-tm_shape(mygrid)+
-  tm_raster(title="Pred. Density",palette="YlGnBu")
-#weird!!
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
+plot(mygrid)
 
-#is it just bad prediction outside of covariate range??
-
-#relationship between occupancy and abundance?
-ggplot(siteInfo_Occ)+
-  geom_point(aes(x=preds,
-                 y=density_preds))
-
-#what does realised density look like?
-siteInfo_Occ$real_density <- siteInfo_Occ$preds * siteInfo_Occ$density_preds
-summary(siteInfo_Occ$real_density)
-mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$real_density
-tm_shape(mygrid)+
-  tm_raster(title="Real. Density",palette="YlGnBu")
-
-#is it just outliers?
-summary(siteInfo_Occ$real_density)
-siteInfo_Occ$real_density[siteInfo_Occ$real_density>300] <- 300
-mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$real_density
-tm_shape(mygrid)+
-  tm_raster(title="Real. Density",palette="YlGnBu")
-#yes! it was just weird outliers!!
-sum(siteInfo_Occ$real_density)
+# using tmap package
+crs(mygrid) <- equalM
+occ_tmap <- tm_shape(mygrid)+
+  tm_raster(title="Density",palette="YlGnBu", style="cont")
+occ_tmap
 
 ### predictive fits #################
 
@@ -347,7 +457,7 @@ sum(siteInfo_Occ$real_density)
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 
-preds <- subset(out1,grepl("exp",out1$Param))
+preds <- subset(out1,grepl("exp.j",out1$Param))
 dataMeans <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
 preds$data <- as.numeric(dataMeans)
 summary(preds$data)
@@ -361,28 +471,13 @@ qplot(data,mean,data=preds)+
 #on log-scale
 qplot(data,mean,data=preds)+
   geom_abline(intercept=0,slope=1)+
-  scale_x_log10()+scale_y_log10()
+  scale_x_log10()+scale_y_log10()+
+  theme_bw()+
+  xlab("Observed data")+ylab("Model prediction")
+
+
 cor.test(log(preds$data),log(preds$mean))
-#v1 - correlation is 0.358
-#v2 - correlation is 0.367
-#v3 - correlation is 0.374
-#v4 - correlation is 0.506
-#v5 - correlation is 0.524
-#v6 - correlation is 0.546
-#model 1 - 0.55
-#model 2 - 0.60
-#model 3 - 0.58
-
-#poisson model
-#model 1 - 0.7159
-#model 2 - 0.7232
-#model 3 - 0.7211
-
-#with random line transect
-#model 1 - 0.8946807 
-
-#with full random line transect
-#model 1 - 0.89778
+#model 3 - 0.85
 
 ### BPV ###################################################
 
@@ -406,8 +501,17 @@ out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variabl
 out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_2.rds")
 out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_3.rds")
 
-#with limited line transect
-out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/out_linetransectModel_variables_1.rds")
+#with limited (i.e., just fit to those with data) line transect random effect
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/out_linetransectModel_variables_3.rds")
+
+#with limited grid random effect
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_grid_transects_random/out_linetransectModel_variables_1.rds")
+
+#with limited gridyear random effect
+out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_gridyear_random/out_linetransectModel_variables_1.rds")
+
+#with random adm effect
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/out_linetransectModel_variables_2.rds")
 
 #BPV
 mean(out1$sims.list$fit.new > out1$sims.list$fit)
@@ -416,9 +520,26 @@ hist(out1$sims.list$fit.new)
 summary(out1$sims.list$fit.new)
 median(out1$sims$fit)
 abline(v=median(out1$sims.list$fit),col="red")
-#good!!!
+
+#model 1 - 0.17
+#model 2 - 0.16
+#model 3 - 0.16
+
+#limited line transect model
+#model 3 - 0.53
+
+#limited grid transect model
+#model 1 - 0.17
+
+#with limited gridyear
+#model 1 - -0.27
+
+#with adm grid year
+#model 1 - 0.213
 
 ### Dharma ###############################################
+
+#for each site mean
 
 library(DHARMa)
 #get simulated data
@@ -437,7 +558,8 @@ preds = out1$mean$exp.j
 #length(preds)
 
 #get mean of observed data
-obs <- apply(bugs.data$NuIndivs,1,median,na.rm=T)
+obs <- out1$mean$NuIndivs.j
+#obs <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
 #dim(obs)
 #dim(obs) <- c(599*11)
 #length(obs)
@@ -457,6 +579,14 @@ sim = createDHARMa(simulatedResponse = t(simulations),
                    integerResponse = T)
 
 plot(sim)
+
+plot(obs,preds)
+abline(0,1)
+#observations tend to be higher than predictions
+
+#DHARMA tests
+testZeroInflation(sim)
+testOverdispersion(sim)#underdispersion
 
 ### check model calc #####################################
 
@@ -485,7 +615,6 @@ plot(sim)
 ### model selection #######################################
 
 #model 1
-out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_1.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
@@ -502,7 +631,6 @@ ggplot(betas)+
 
 
 #model 2 = lasso
-out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_2.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
@@ -519,7 +647,6 @@ ggplot(betas)+
              linetype="dashed")
 
 #model 3 = variable indicator
-out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 betas <- subset(out1,grepl("beta",out1$Param))
@@ -535,7 +662,23 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
-#### cross validation ######################################
+
+#or plot gs
+gs <- subset(out1,grepl("g",out1$Param))
+gs$variables <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
+                     "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
+                     "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
+                     "Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2","SnowBeds_2")
+ggplot(gs)+
+  geom_col(aes(x=variables,y=mean))+
+  coord_flip()+
+  theme_bw()+
+  ylab("Proportion of model inclusion")+
+  geom_hline(yintercept=0,color="red",
+             linetype="dashed")+
+  xlab("Predictor")
+
+### cross validation #####################################
 
 #CV fold models
 allFiles <- list.files("model-outputs/SLURM/distanceModel/CV")
@@ -570,8 +713,6 @@ length(unique(out1_dataset$siteIndex)) == dim(totalsInfo)[1]
 #plot correlation between mean values
 meanVals <- plyr::ddply(out1_dataset,"siteIndex",summarise,pred=mean(value))
 meanVals$obs <- totalsInfo_mean
-#qplot(log(obs),log(pred),data=meanVals)
-#cor.test(log(meanVals$obs),log(meanVals$pred))#0.48
 
 #get difference between this value and the simulated values
 mad_dataset <- as.numeric()
@@ -634,10 +775,15 @@ test_3 <- 1:5 %>%
 #combine
 allCV <- bind_rows(train_1,test_1,train_2,test_2,train_3,test_3) 
 
+allCV$model <- as.factor(allCV$model)
+levels(allCV$model) <- c("Gaussian priors", "LASSO priors", "Variable indicator")
+allCV$model <- factor(allCV$model, levels = c("LASSO priors", "Variable indicator","Gaussian priors"))
+
 #plots
 ggplot(allCV) + 
   geom_point(aes(x=fold,y=cor,colour=model))+
-  facet_wrap(~dataset)
+  facet_wrap(~dataset)+
+  theme_bw() + ylab("Correlation coefficient")
 
 ggplot(allCV) + 
   geom_pointrange(aes(x = fold, y = mad_median, ymin = mad_lower, ymax = mad_upper,
@@ -649,11 +795,13 @@ ggplot(allCV) +
                       colour=model))+
   facet_wrap(~dataset)
   
+colMeans(subset(allCV, model=="Variable indicator" & dataset=="train")[,-c(1:3)])
 
-#### COMBINED model #####################################
+colMeans(subset(allCV, model=="Variable indicator" & dataset=="test")[,-c(1:3)])
+
+### COMBINED model #####################################
 
 #from combined model:
-
 out1 <- readRDS("model-outputs/outSummary_simpleCombinedModel.rds")
 out1[row.names(out1)=="totalAbund",]
 
@@ -662,7 +810,6 @@ out1$Param <- row.names(out1)
 preds <- subset(out1,grepl("realAbund",out1$Param))
 
 #or get data from "HPC_simple_combined_analysis:
-
 out2 <- data.frame(out1$summary)
 out2$Param <- row.names(out2)
 preds <- subset(out2,grepl("realAbund",out2$Param))
@@ -671,13 +818,13 @@ summary(siteInfo_Occ$preds)#minus numbers???
 
 #bound to reasonable
 siteInfo_Occ$preds[siteInfo_Occ$preds<0] <- 0
-siteInfo_Occ$preds[siteInfo_Occ$preds>400] <- 400
+siteInfo_Occ$preds[siteInfo_Occ$preds>500] <- 500
 
 mygrid[] <- NA
 mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
 crs(mygrid) <- equalM
 total_tmap <- tm_shape(mygrid)+
-  tm_raster(title="Abundance",palette="YlGnBu")
+  tm_raster(title="Abundance",palette="YlGnBu",style="cont")
 total_tmap
 
 #plot uncertainty too
@@ -686,9 +833,12 @@ mygrid[] <- NA
 mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
 crs(mygrid) <- equalM
 sd_tmap <- tm_shape(mygrid)+
-  tm_raster(title="Abundance uncertainty",palette="YlGnBu",n=6)
+  tm_raster(title="SD",palette="YlGnBu",n=6,style="cont")
 sd_tmap
 
+tmap_arrange(total_tmap, sd_tmap, nrow = 1)
+
+#### other ##################################################
 #relationship between mean and uncertainity
 qplot(mean,sd^2,data=preds)+stat_smooth(method="lm")
 #positive....
