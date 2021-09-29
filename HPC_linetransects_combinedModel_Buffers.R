@@ -376,7 +376,7 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 bugs.data$n.preds <- dim(bugs.data$predDM)[1]
 
 
-#saveRDS(bugs.data, file="data/bugs.data_ArtsDaten.rds")
+#saveRDS(bugs.data, file="data/bugs.data_linetransects.rds")
 
 ### fit model #################################################
 
