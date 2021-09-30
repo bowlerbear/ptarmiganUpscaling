@@ -102,3 +102,6 @@ plot(out1$mean$exp2,out1$mean$exp3)
 plot(out1$mean$exp1,out1$mean$exp3)#one and three are the same!!!
 plot(dat$preds,out1$mean$exp3)#three matches the predictions of the glm
 cor(dat$preds,out1$mean$exp3)
+
+#relationship with link model response
+plot(out1$mean$expNuIndivs,out1$mean$exp3)#the same!!!
