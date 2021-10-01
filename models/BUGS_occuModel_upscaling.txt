@@ -29,8 +29,10 @@
                       beta.effort * Effort[j] +
                       beta.effort2 * Effort2[j] +
                       beta.det.open * det.open[j] +
-                      beta.det.bio * det.bio[j] +
+                      beta.det.bio5 * det.bio5[j] +
+                      beta.det.bio6 * det.bio6[j] +
                       beta.det.tlp * det.tlp[j] +
+                      beta.det.tlp2 * det.tlp2[j] +
                       random.det.year[year[j]] +
                       random.det.adm[det.adm[j]]
                       
@@ -151,8 +153,10 @@
     
     #covariate effects
     beta.det.tlp ~ dnorm(0,0.01)
+    beta.det.tlp2 ~ dnorm(0,0.01)
     beta.det.open ~ dnorm(0,0.01)
-    beta.det.bio ~ dnorm(0,0.01)
+    beta.det.bio5 ~ dnorm(0,0.01)
+    beta.det.bio6 ~ dnorm(0,0.01)
     beta.effort ~ dnorm(0,0.01)
     beta.effort2 ~ dnorm(0,0.01)
     
