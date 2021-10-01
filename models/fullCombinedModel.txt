@@ -12,7 +12,8 @@
     
       z[i,t] ~ dbern(muZ[i,t]) 
       
-      logit(muZ[i,t]) <- int.alphaCT + inprod(betaCT[],occDMCT[i,]) + 
+      logit(muZ[i,t]) <- int.alphaCT +
+                          inprod(betaCT[],occDMCT[i,]) + 
                           random.admCT[admCT[i]] + 
                           etaCT[i]+
                           random.yearCT[t]+
@@ -24,12 +25,12 @@
   }   
   
   ### Observation Model
-  for(j in 1:nvisit) {
+  for(j in 1:nvisitCT) {
     yCT[j] ~ dbern(Py[j]) #data is Y
-    Py[j]<- z[site[j],year[j]]*p[j] 
+    Py[j]<- z[siteCT[j],yearCT[j]]*p[j] 
 
     #detection model:
-      logit(p[j]) <-  int.dCT + 
+      logit(p[j]) <-  int.dCT +
                       beta.effortCT * EffortCT[j] +
                       beta.effort2CT * Effort2CT[j] +
                       beta.det.openCT * det.openCT[j] +
@@ -48,12 +49,12 @@
   #average detection prob
   average.p <- mean(p)
   average.psi <- mean(muZ.i)
-  propOcc <- sum(muZ.i)/nsite 
+  propOcc <- sum(muZ.i)/nsiteCT 
   
   #get mean z without year effect
   for (i in 1:nsiteCT){ 
-      grid.z[i] <- sum(z[i,])/nyear
-      grid.psi[i] <- sum(muZ[i,])/nyear
+      grid.z[i] <- sum(z[i,])/nyearCT
+      grid.psi[i] <- sum(muZ[i,])/nyearCT
   } 
   
   #get mid years psi and z
@@ -75,7 +76,7 @@
           #using simulated data
           sim.idx[j,t] <- y.sim[j] * StrIdxCT[j,t]
           
-          obs.idx[j,t] <- y[j] * StrIdxCT[j,t]
+          obs.idx[j,t] <- yCT[j] * StrIdxCT[j,t]
               
         }
         
@@ -200,14 +201,14 @@
     
     # LIKELIHOOD
     # using zeros trick
-    L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
+    L.f0[i] <- exp(-yLT[i]*yLT[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
     nlogL.f0[i] <-  -log(L.f0[i])
     zeros.dist[i] ~ dpois(nlogL.f0[i])
     }
 
     #using this model and predicted group size (below), get predicted ESW 
-    for(t in 1:nyear){
-      for(j in 1:nsite){
+    for(t in 1:nyearLT){
+      for(j in 1:nsiteLT){
         pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(GroupSizesLT[j,t]+1) + b.admLT[admLT[j]]) 
         pred.sig2[j,t] <- pow(pred.sig[j,t],2)
         predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
@@ -272,13 +273,13 @@
     for(j in 1:nsiteLT){
       for(t in 1:nyearLT){
       
-        NuIndivs[j,t] ~ dnegbin(p[j,t],r)
+        NuIndivs[j,t] ~ dnegbin(pr[j,t],r)
         
-        p[j,t] <- r/(r+expNuIndivs[j,t])
+        pr[j,t] <- r/(r+expNuIndivs[j,t])
         
         #NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
         
-        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLengthLT[j,t]/1000 * predESW[j,t]/1000 * 2
         
       }
     }
@@ -330,10 +331,10 @@
       for(t in 1:nyearLT){ 
 
         #expected value of model
-        exp[j,t] <- (r*(1-p[j,t]))/p[j,t]
+        exp[j,t] <- (r*(1-pr[j,t]))/pr[j,t]
         
         #New samples
-        NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
+        NuIndivs.new[j,t] ~ dnegbin(pr[j,t],r)
         
       }
       exp.j[j] <- mean(exp[j,])
@@ -341,16 +342,16 @@
       NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])
     }
     
-    e <- 0.0001
+    e2 <- 0.0001
     
     #do discrepancy at the site-level
     for(j in 1:nsiteLT){
         
         #compared to data
-        chi2LT[j] <- pow((NuIndivs.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e)
+        chi2LT[j] <- pow((NuIndivs.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e2)
         
         #compared to simulated values
-        chi2.newLT[j] <- pow((NuIndivs.new.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e) 
+        chi2.newLT[j] <- pow((NuIndivs.new.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e2) 
       
     }
     
@@ -368,16 +369,16 @@
     
     #mean tot pop per year
     for (t in 1:nyearCT){
-      annual.population[t] <- sum(realizedDensity[i,])
+      annual.pop[t] <- sum(realizedDensity[,t])
     }
     
-    mean grid per year
-    for (t in 1:nsiteCT){ 
-      grid.population[t] <- mean(realizedDensity[,t])
+    #mean grid per year
+    for (i in 1:nsiteCT){ 
+      grid.pop[i] <- mean(realizedDensity[i,])
     }
     
+    total.pop <- sum(grid.pop)
       
-
   }
     
     
