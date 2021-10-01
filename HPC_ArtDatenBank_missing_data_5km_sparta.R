@@ -132,9 +132,11 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   #detection covariates
                   Effort = listlengthDF$singleton,
                   Effort2 = listlengthDF$short,
-                  det.tlp = listlengthDF$tree_line_position/1000,
+                  det.tlp = listlengthDF$tree_line/100,
+                  det.tlp2 = listlengthDF$tree_line^2/100000,
                   det.open = listlengthDF$Open,
-                  det.bio = listlengthDF$bio5/100,
+                  det.bio5 = listlengthDF$bio5/100,
+                  det.bio6 = listlengthDF$bio6/100,
                   #add an adm effect
                   adm = siteInfo$admN,
                   det.adm = listlengthDF$admN,
@@ -202,12 +204,14 @@ if(mymodel == "BUGS_occuModel_upscaling.txt"){
 bugs.data$occDM <- model.matrix(~ siteInfo$tree_line_position +
                                    I(siteInfo$tree_line_position^2) +
                                    siteInfo$y +
-                                   siteInfo$bio1 +
-                                   I(siteInfo$bio1^2) +
                                    siteInfo$Bog +
+                                   I(siteInfo$Bog^2) +
+                                   siteInfo$Mire +
                                    siteInfo$Meadows +
                                    siteInfo$ODF +
+                                   I(siteInfo$ODF^2) +
                                    siteInfo$OSF +
+                                   I(siteInfo$OSF^2) +
                                    siteInfo$MountainBirchForest)[,-1]
 #saveRDS(bugs.data,file="data/bugs.data_ArtsDaten.rds")
 
