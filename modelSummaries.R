@@ -348,7 +348,6 @@ out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 
 #with admyear as a random effect
-
 out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_1.rds")
 
 out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_2.rds")
@@ -586,7 +585,7 @@ abline(0,1)
 
 #DHARMA tests
 testZeroInflation(sim)
-testOverdispersion(sim)#underdispersion
+testOverdispersion(sim)
 
 ### check model calc #####################################
 
@@ -611,6 +610,48 @@ testOverdispersion(sim)#underdispersion
 # out1$mean$NuIndivs.j[543]#works!
 # 
 # #few were visited in 2007 and 2008
+
+### MAD ###################################################
+
+#quick check
+# out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_4.rds")
+# 
+# qplot(out1$mean[grepl("mean.expNuIndivs",row.names(out1))],
+#       out1$mean[grepl("exp.j",row.names(out1))])
+# #the same!!!
+
+#null model
+out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/out_linetransectModel_variables_4.rds")
+
+#extract dataset data
+ggd <- ggs(out1$samples)
+out1_dataset <- subset(ggd,grepl("expNuIndivs",ggd$Parameter))
+out1_dataset <- subset(out1_dataset,!grepl("mean.expNuIndivs",out1_dataset$Parameter))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,
+                                             out1_dataset$Chain))
+subset(out1_dataset,Iteration==1 & Chain==1)
+
+#get actual NuIndiv
+totalsInfo_long <- as.numeric(gdata::unmatrix(totalsInfo,byrow=T))
+
+#get difference between this value and the simulated values
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
+
+for(i in 1:n.index){
+  mad_dataset[i] <- mean(abs(totalsInfo_long[!is.na(totalsInfo_long)] - 
+                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_long)]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_long[!is.na(totalsInfo_long)] - 
+                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_long)])^2))
+  
+}
+
+summary(mad_dataset)
+summary(rmse_dataset)
+
+#try calculation within code??
 
 ### model selection #######################################
 
@@ -665,6 +706,7 @@ ggplot(betas)+
 
 #or plot gs
 gs <- subset(out1,grepl("g",out1$Param))
+gs <- subset(gs,!grepl("b.group.size",gs$Param))
 gs$variables <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
                      "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
                      "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
@@ -677,6 +719,11 @@ ggplot(gs)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")+
   xlab("Predictor")
+
+#ones included in more than 25% of models:
+#tree line - additive and squared
+#bio5
+#bio6
 
 ### cross validation #####################################
 
@@ -839,6 +886,7 @@ sd_tmap
 tmap_arrange(total_tmap, sd_tmap, nrow = 1)
 
 #### other ##################################################
+
 #relationship between mean and uncertainity
 qplot(mean,sd^2,data=preds)+stat_smooth(method="lm")
 #positive....
