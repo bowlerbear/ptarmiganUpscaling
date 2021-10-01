@@ -183,6 +183,8 @@ ggplot(betas)+
   geom_hline(yintercept=0,color="red",
              linetype="dashed")
 
+subset(betas,mean>0.25)
+
 ### BPV #####################################################
 
 #or slurm models
