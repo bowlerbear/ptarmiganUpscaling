@@ -1,0 +1,119 @@
+
+    model{
+    
+    #################
+    #Detection model#
+    #################
+    
+    pi <- 3.141593
+    
+    # priors for fixed effect parms for half-normal detection parm sigma
+    b.df.0 ~ dunif(0,20)        
+
+    for(i in 1:ndetections){
+    #linear predictor
+    mu.df[i] <- b.df.0
+    
+    # estimate of sd and var, given coeffs above
+    sig.df[i] <- exp(mu.df[i])
+    sig2.df[i] <- sig.df[i]*sig.df[i]
+    
+    # effective strip width
+    esw[i] <- sqrt(pi * sig2.df[i] / 2) 
+    f0[i] <- 1/esw[i] #assuming all detected on the line
+    
+    # LIKELIHOOD
+    # using zeros trick
+    L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
+    nlogL.f0[i] <-  -log(L.f0[i])
+    zeros.dist[i] ~ dpois(nlogL.f0[i])
+    }
+
+    #using this model and predicted group size (below), get predicted ESW 
+    for(t in 1:nyear){
+      for(j in 1:nsite){
+        pred.sig[j,t] <- exp(b.df.0) 
+        pred.sig2[j,t] <- pow(pred.sig[j,t],2)
+        predESW[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
+      }
+    }
+
+    ########################
+    #Model of total density#
+    ########################
+
+    #intercept
+    int.d ~ dnorm(0,0.001)    
+    
+    #Observation model:
+    r ~ dunif(0,50)
+    for(j in 1:nsite){
+      for(t in 1:nyear){
+      
+        NuIndivs[j,t] ~ dnegbin(p[j,t],r)
+        
+        p[j,t] <- r/(r+expNuIndivs[j,t])
+        
+        #NuIndivs[j,t] ~ dpois(expNuIndivs[j,t])
+        
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength[j,t]/1000 * predESW[j,t]/1000 * 2
+        
+      }
+    }
+    
+    #State model
+    for(j in 1:nsite){
+      for(t in 1:nyear){
+      
+      #linear predictor on density
+        log(Density.jt[j,t]) <- int.d
+                            
+    }}
+    
+    #predict observations - original scale and density scale
+    for(j in 1:nsite){
+      meanDensity[j] <- mean(Density.jt[j,])
+      meanESW[j] <- mean(predESW[j,])
+      
+    }
+  
+    #calculate the Bayesian p-value - at the site-level
+    
+    #get expected values per site
+    for(j in 1:nsite){
+      for(t in 1:nyear){ 
+
+        #expected value of model
+        exp[j,t] <- (r*(1-p[j,t]))/p[j,t]
+        
+        #New samples
+        NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
+        
+      }
+      #expectations of the model
+      exp.j[j] <- mean(exp[j,])
+      #mean.expNuIndivs[j] <- mean(expNuIndivs[j,])#this is the same as the previous line
+      
+      NuIndivs.j[j] <- mean(NuIndivs[j,])#mean of raw data
+      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])#mean of simulated values
+    }
+    
+    e <- 0.0001
+    
+    #do discrepancy at the site-level
+    for(j in 1:nsite){
+        
+        #compared to data
+        chi2[j] <- pow((NuIndivs.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e)
+        
+        #compared to simulated values
+        chi2.new[j] <- pow((NuIndivs.new.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e) 
+      
+    }
+    
+    # Add up discrepancy measures for entire data set
+      fit <- sum(chi2[])                     
+      fit.new <- sum(chi2.new[])             
+    
+    }
+    

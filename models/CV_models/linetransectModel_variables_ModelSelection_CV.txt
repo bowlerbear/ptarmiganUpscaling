@@ -1,0 +1,143 @@
+
+    model{
+
+    #################
+    #Detection model#
+    #################
+    
+    pi <- 3.141593
+    
+    # priors for fixed effect parms for half-normal detection parm sigma
+    b.df.0 ~ dunif(0,20)        
+    b.group.size ~ dnorm(0,0.01)
+
+    for(i in 1:ndetections_train){
+     #linear predictor
+     mu.df[i] <- b.df.0 + b.group.size * ln_GroupSize[i] 
+    
+     # estimate of sd and var, given coeffs above
+     sig.df[i] <- exp(mu.df[i])
+     sig2.df[i] <- sig.df[i]*sig.df[i]
+    
+     # effective strip width
+     esw[i] <- sqrt(pi * sig2.df[i] / 2) 
+     f0[i] <- 1/esw[i] #assuming all detected on the line
+    
+     # LIKELIHOOD
+     # using zeros trick
+     #y[i] ~ dunif(0,W) 
+     L.f0[i] <- exp(-y[i]*y[i] / (2*sig2.df[i])) * 1/esw[i] #y are the distances
+     nlogL.f0[i] <-  -log(L.f0[i])
+     zeros.dist[i] ~ dpois(nlogL.f0[i])
+    }
+
+    #get predicted ESW - training dataset
+    for(t in 1:nyear){
+      for(j in 1:nsite_train){
+        pred.sig[j,t] <- exp(b.df.0 + b.group.size * log(groupSizes_train[j,t]+1)) 
+        pred.sig2[j,t] <- pow(pred.sig[j,t],2)
+        predESW_train[j,t] <- sqrt(pi * pred.sig2[j,t] / 2)
+      }
+    }
+    
+    #get predicted ESW - test dataset
+    for(t in 1:nyear){
+      for(j in 1:nsite_test){
+        pred.sig_test[j,t] <- exp(b.df.0 + b.group.size * log(groupSizes_test[j,t]+1))
+        pred.sig2_test[j,t] <- pow(pred.sig_test[j,t],2)
+        predESW_test[j,t] <- sqrt(pi * pred.sig2_test[j,t] / 2)
+      }
+    }
+
+    ########################
+    #Model of total density#
+    ########################
+
+    #intercept
+    int.d ~ dnorm(0,0.001)    
+    
+    #random line effect
+    line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    line.d.tau <- pow(line.d.sd,-2)
+    for(j in 1:nsite_train){
+      random.d.line[j] ~ dnorm(0,line.d.tau)
+    }
+    
+    #random year effect
+    year.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    year.d.tau <- pow(year.d.sd,-2)
+    for(t in 1:nyear){
+      random.d.year[t] ~ dnorm(0,year.d.tau)
+    }
+
+    #from Rushing et al.
+    ## Priors for linear indicator variables -- prob = 1 if quadratic term in model, 0.5 otherwise
+    for(i in 1:12){
+      g[i] ~ dbern(0.5)
+    }
+    
+    ## Priors for quadratic indicator variables - prob = 0.5
+    for(i in 13:24){
+      g[i] ~ dbern(g[i - 12] * 0.5)
+    }
+    
+    ## Priors for betas 
+    
+    for(i in 1:24){ # need to change?
+      #https://gist.github.com/oliviergimenez/8cffedd2defc32a6811d7e715b898d6a
+      #simple approach
+      betaT[i] ~ dnorm(0,0.01)
+      beta[i] <- g[i] * betaT[i]
+    }
+
+    #Observation model:
+    r ~ dunif(0,50)
+    for(j in 1:nsite_train){
+      for(t in 1:nyear){
+        NuIndivs[j,t] ~ dnegbin(p[j,t],r)
+        p[j,t] <- r/(r+expNuIndivs[j,t])
+        expNuIndivs[j,t] <- Density.jt[j,t] * TransectLength_train[j,t]/1000 * predESW_train[j,t]/1000 * 2
+      }}
+
+    #State model
+    for(j in 1:nsite_train){
+      for(t in 1:nyear){
+      
+      #linear predictor on density
+        log(Density.jt[j,t]) <- int.d +  
+                                random.d.year[t] +
+                                inprod(beta[],occDM_train[j,])
+
+    }}
+
+
+    #Test dataset:
+    
+    for(j in 1:nsite_test){
+      for(t in 1:nyear){
+      
+      expNuIndivs_test[j,t] <- Density.jt_test[j,t] * TransectLength_test[j,t]/1000 * predESW_test[j,t]/1000 * 2
+      
+      #linear predictor on density
+        log(Density.jt_test[j,t]) <- int.d +
+                            random.d.year[t] +
+                            inprod(beta[],occDM_test[j,]) 
+
+      }
+    }
+ 
+    #pull out mean data
+    
+    for(j in 1:nsite_train){
+      mean.Density_train[j] <- sum(Density.jt[j,1:nyear])/nyear
+      mean.expNuIndivs_train[j] <- sum(expNuIndivs[j,1:nyear])/nyear
+    }
+    
+     for(j in 1:nsite_test){
+      mean.Density_test[j] <- sum(Density.jt_test[j,1:nyear])/nyear
+      mean.expNuIndivs_test[j] <- sum(expNuIndivs_test[j,1:nyear])/nyear
+    }
+    
+    
+    }
+    

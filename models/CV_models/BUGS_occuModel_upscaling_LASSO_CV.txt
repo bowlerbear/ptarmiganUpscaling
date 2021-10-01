@@ -1,0 +1,124 @@
+
+  model{
+
+
+  #### Training dataset ####
+
+  # State model
+  for (i in 1:nsite_train){ 
+    for (t in 1:nyear_train){
+    
+      z[i,t] ~ dbern(muZ[i,t]) 
+      
+      logit(muZ[i,t])<- int.alpha + inprod(beta[],occDM_train[i,]) + 
+                          random.year[t] 
+      
+    }
+  }   
+  
+  ### Observation Model
+  for(j in 1:nvisit_train) {
+  
+    y_train[j] ~ dbern(Py_train[j]) #data is Y
+    Py_train[j]<- z[site_train[j],year_train[j]]*p[j] 
+
+    #detection model:
+      logit(p[j]) <-  int.d + 
+                      beta.effort * Effort_train[j] +
+                      beta.effort2 * Effort2_train[j] +
+                      beta.det.open * det.open_train[j] +
+                      beta.det.bio * det.bio_train[j] +
+                      beta.det.tlp * det.tlp_train[j] +
+                      random.det.year[year_train[j]]  
+                      
+                      
+    } 
+  
+  #### Testing dataset ####
+  
+  # State model
+  for (i in 1:nsite_test){ 
+    for (t in 1:nyear_test){
+    
+      z_test[i,t] ~ dbern(muZ_test[i,t]) 
+      
+      logit(muZ_test[i,t])<- int.alpha + inprod(beta[],occDM_test[i,]) + 
+                          random.year[t] 
+      
+    }
+  }   
+  
+  ### Observation Model
+  for(j in 1:nvisit_test) {
+
+    #compare Py with y
+    Py_test[j]<- z_test[site_test[j],year_test[j]]*p_test[j] 
+
+    #detection model:
+      logit(p_test[j]) <-  int.d + 
+                      beta.effort * Effort_test[j] +
+                      beta.effort2 * Effort2_test[j] +
+                      beta.det.open * det.open_test[j] +
+                      beta.det.bio * det.bio_test[j] +
+                      beta.det.tlp * det.tlp_test[j] +
+                      random.det.year[year_test[j]] 
+                      
+                      
+    } 
+  
+  #pull out mid values 
+  
+  for(i in 1:nsite_train){
+    mid.z_train[i] <- z[i,6]
+    mid.psi_train[i] <- muZ[i,6]
+  }
+  
+  for(i in 1:nsite_test){
+    mid.z_test[i] <- z_test[i,6]
+    mid.psi_test[i] <- muZ_test[i,6]
+  }
+  
+
+  #Priors 
+
+  # State model priors
+    ############################
+    
+    #intercept
+    mean.psi ~ dunif(0, 1)       
+    int.alpha <- logit(mean.psi)
+ 
+    for(i in 1:n.covs){
+      beta[i] ~ ddexp(0, dd.tau)
+    }
+    dd.tau ~ dgamma(0.01, 0.01)
+    
+    #years
+    for(t in 1:nyear_train){
+      random.year[t] ~ dnorm(0, tau.a)
+    }
+    tau.a <- 1/(sd.a * sd.a)
+    sd.a ~ dt(0, 1, 1)T(0,) 
+    
+
+    #Observation model priors
+    ##########################
+    mean.p ~ dunif(0, 1)        
+    int.d <- logit(mean.p)
+    
+    #year effects
+    for (t in 1:nyear_train) {
+      random.det.year[t] ~ dnorm(0, tau.lp)            
+    }
+    tau.lp <- 1 / (sd.lp * sd.lp)                 
+    sd.lp ~ dt(0, 1, 1)T(0,)  
+    
+    #covariate effects
+    beta.det.tlp ~ dnorm(0,0.01)
+    beta.det.open ~ dnorm(0,0.01)
+    beta.det.bio ~ dnorm(0,0.01)
+    beta.effort ~ dnorm(0,0.01)
+    beta.effort2 ~ dnorm(0,0.01)
+
+  }
+    

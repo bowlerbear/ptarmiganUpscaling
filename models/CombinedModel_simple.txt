@@ -1,0 +1,21 @@
+
+    model{
+    
+    e <- 0.0001
+    
+    for (i in 1:nsite){ 
+      
+      density_tau[i] <- pow(density_sd[i],-2)
+      occ_tau[i] <- pow(occ_sd[i]+e,-2)
+      
+      Density[i] ~ dnorm(density_mean[i],density_tau[i]) 
+      muZ[i] ~ dnorm(occ_mean[i],occ_tau[i])
+      
+      realAbund[i] <- Density[i] * muZ[i]
+    
+    }
+
+    totalAbund <- sum(realAbund)
+    
+    }
+    
