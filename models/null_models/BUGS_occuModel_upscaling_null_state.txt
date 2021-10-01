@@ -1,0 +1,132 @@
+
+  model{
+
+  # State model
+  for (i in 1:nsite){ 
+  
+    for (t in 1:nyear){
+    
+      z[i,t] ~ dbern(muZ[i,t]) 
+      
+      logit(muZ[i,t]) <- int.alpha 
+    }
+    
+      muZ.i[i] <- mean(muZ[i,])
+  
+  }   
+  
+  ### Observation Model
+  for(j in 1:nvisit) {
+    y[j] ~ dbern(Py[j]) #data is Y
+    Py[j]<- z[site[j],year[j]]*p[j] 
+
+    #detection model:
+      logit(p[j]) <-  int.d + 
+                      beta.effort * Effort[j] +
+                      beta.effort2 * Effort2[j] +
+                      beta.det.open * det.open[j] +
+                      beta.det.bio5 * det.bio5[j] +
+                      beta.det.bio6 * det.bio6[j] +
+                      beta.det.tlp * det.tlp[j] +
+                      beta.det.tlp2 * det.tlp2[j] +
+                      random.det.year[year[j]] +
+                      random.det.adm[det.adm[j]]
+                      
+                      
+    #Create simulated dataset to calculate the Bayesian p-value
+    y.sim[j] ~ dbern(Py[j]) #data is Y
+                      
+    }
+  
+  #summary variables for reporting
+  #average detection prob
+  average.p <- mean(p)
+  average.psi <- mean(muZ.i)
+  propOcc <- sum(muZ.i)/nsite 
+  
+  #get mean z without year effect
+  for (i in 1:nsite){ 
+      grid.z[i] <- sum(z[i,])/nyear
+      grid.psi[i] <- sum(muZ[i,])/nyear
+  } 
+  
+  #get mid years psi and z
+  for(i in 1:nsite){
+    mid.z[i] <- z[i,6]
+    mid.psi[i] <- muZ[i,6]
+  }
+  
+  #Bayesian p-value:
+  e <- 0.0001
+  #get expected number of detection per site 
+    for(t in 1:nyear){
+    
+        for(j in 1:nvisit){
+        
+          #expected count based on model fit
+          exp.idx[j,t] <- Py[j] * StrIdx[j,t]     
+          
+          #using simulated data
+          sim.idx[j,t] <- y.sim[j] * StrIdx[j,t]
+          
+          obs.idx[j,t] <- y[j] * StrIdx[j,t]
+              
+        }
+        
+    e.count[t] <- sum(exp.idx[,t])
+    sim.count[t] <- sum(sim.idx[,t])
+    obs.count[t] <- sum(obs.idx[,t])
+      
+    # Chi-square discrepancy for the actual data
+    chi2[t] <- pow((obs.count[t] - e.count[t]),2) / (e.count[t]+e)
+    
+    # Chi-square discrepancy for the simulated ('perfect') data
+    chi2.sim[t] <- pow((sim.count[t] - e.count[t]),2) / (e.count[t]+e)
+    
+    }
+    
+    # Add up individual chi2 values for overall fit statistic
+    fit <- sum(chi2)  
+    fit.new <- sum(chi2.sim)       
+      
+
+  #Priors 
+
+  # State model priors
+    ############################
+    
+    #intercept
+    mean.psi ~ dunif(0, 1)       
+    int.alpha <- logit(mean.psi)
+ 
+    #Observation model priors
+    ##########################
+    mean.p ~ dunif(0, 1)        
+    int.d <- logit(mean.p)
+    
+    #year effects
+    for (t in 1:nyear) {
+      random.det.year[t] ~ dnorm(0, tau.lp)            
+    }
+    tau.lp <- 1 / (sd.lp * sd.lp)                 
+    sd.lp ~ dt(0, pow(2.5,-2), 1)T(0,) 
+    
+    #covariate effects
+    beta.det.tlp ~ dnorm(0,0.01)
+    beta.det.tlp2 ~ dnorm(0,0.01)
+    beta.det.open ~ dnorm(0,0.01)
+    beta.det.bio5 ~ dnorm(0,0.01)
+    beta.det.bio6 ~ dnorm(0,0.01)
+    beta.effort ~ dnorm(0,0.01)
+    beta.effort2 ~ dnorm(0,0.01)
+    
+    #adm effects
+    for(i in 1:n.adm){
+      random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
+    }
+    random.det.adm.tau <- pow(random.adm.sd,-2)
+    random.det.adm.sd ~ dt(0, pow(2.5,-2), 1)T(0,) 
+
+
+  }
+    
