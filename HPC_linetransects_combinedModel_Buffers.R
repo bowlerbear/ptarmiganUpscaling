@@ -225,30 +225,16 @@ mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
 if(mymodel == "linetransectModel_variables.txt"){
   
 #add new variables to the bugs data
-bugs.data$occDM <- model.matrix(~ bufferData$y +
-                                  bufferData$bio6 +
-                                  I(bufferData$bio6^2) +
-                                  bufferData$distCoast +
-                                  I(bufferData$distCoast^2) +
+bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
-                                  I(bufferData$bio5^2) +
                                   bufferData$tree_line +
-                                  I(bufferData$tree_line^2) +
-                                  bufferData$OSF +
-                                  bufferData$SnowBeds)[,-1]
+                                  I(bufferData$tree_line^2))[,-1]
 
 #predictions to full grid
-bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$y +
-                                   siteInfo_ArtsDaten$bio6 +
-                                   I(siteInfo_ArtsDaten$bio6^2) +
-                                   siteInfo_ArtsDaten$distCoast +
-                                   I(siteInfo_ArtsDaten$distCoast^2) +
+bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                    siteInfo_ArtsDaten$bio5 +
-                                   I(siteInfo_ArtsDaten$bio5^2) +
                                    siteInfo_ArtsDaten$tree_line +
-                                   I(siteInfo_ArtsDaten$tree_line^2) +
-                                   siteInfo_ArtsDaten$OSF +
-                                   siteInfo_ArtsDaten$SnowBeds)[,-1]
+                                   I(siteInfo_ArtsDaten$tree_line^2))[,-1]
 
 ### indicator model selection ################################
 
@@ -384,11 +370,11 @@ library(rjags)
 library(jagsUI)
 
 params <- c("int.d","beta","g",
-            "b.group.size","meanESW",
-            "meanDensity","Density.jt",
-            "Density",
+            "b.group.size","meanESW","random.d.line",
+            "meanDensity","Density",
             "fit","fit.new",
-            "NuIndivs.j","NuIndivs.new.j","exp.j")
+            "NuIndivs.j","NuIndivs.new.j",
+            "expNuIndivs","exp.j")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
