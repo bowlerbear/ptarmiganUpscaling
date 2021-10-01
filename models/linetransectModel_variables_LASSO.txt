@@ -53,6 +53,12 @@
     #intercept
     int.d ~ dnorm(0,0.001)    
     
+    #random transect effect
+    transect.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    transect.d.tau <- pow(transect.d.sd,-2)
+    for(j in 1:nsite){
+      random.d.transect[j] ~ dnorm(0,transect.d.tau)
+    } 
      
     #random line effect - all lines
     line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
@@ -60,14 +66,6 @@
     for(j in 1:nsiteAll){
       random.d.line[j] ~ dnorm(0,line.d.tau)
     }
-    
-    
-    #random line effect
-    #line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
-    #line.d.tau <- pow(line.d.sd,-2)
-    #for(j in 1:nsite){
-    #  random.d.line[j] ~ dnorm(0,line.d.tau)
-    #}
     
     #random year/line effect
     yearline.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
@@ -133,6 +131,7 @@
                             random.d.year[t] +
                             inprod(beta[],occDM[j,]) +
                             random.d.adm[adm[j]] +
+                            random.d.transect[j] +
                             random.d.line[siteAll[j]] +
                             random.d.yearline[siteAll[j],t] +
                             random.d.yearadm[adm[j],t]

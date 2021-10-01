@@ -90,9 +90,12 @@
         NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
         
       }
+      #expectations of the model
       exp.j[j] <- mean(exp[j,])
-      NuIndivs.j[j] <- mean(NuIndivs[j,])
-      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])
+      #mean.expNuIndivs[j] <- mean(expNuIndivs[j,])#this is the same as the previous line
+      
+      NuIndivs.j[j] <- mean(NuIndivs[j,])#mean of raw data
+      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])#mean of simulated values
     }
     
     e <- 0.0001
