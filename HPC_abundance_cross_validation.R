@@ -14,8 +14,8 @@ myfolder <- "/data/idiv_ess/ptarmiganUpscaling" #HPC
 #read in data frame
 allData <- readRDS(paste(myfolder,"allData.rds",sep="/"))
 
-#subset to years of interest
-allData <- subset(allData,Year>2006 & Year<2018)
+#subset to years of interest - 2008 onwards
+allData <- subset(allData,Year>2007 & Year<2018)
 
 #remove hyphens for help with subsetting
 allData$Fylkesnavn <- gsub("-"," ",allData$Fylkesnavn)
@@ -24,30 +24,47 @@ allData$Fylkesnavn[which(allData$Rapporteringsniva=="Indre Troms")] <- "Troms"
 #mistake with 1405 - transect length
 allData$LengdeTaksert[which(allData$LinjeID==1405&allData$LengdeTaksert==1100)] <- 11000
 
+### remove outliers (see section below) #############################
+
+#LinjeID 1925 has twice as high counts as all others
+allData <- subset(allData, LinjeID!=1925)
+
+#remove LinjeID 131?? -only 503 m long - smallest transect
+
+#drop lines visited in less than 5 years - see below
+allData <- subset(allData, !LinjeID %in% 
+                    c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339))
+
 ### aggregate data to the lines ######################################
 
 #Get statistics per year and line
 tlDF <- allData %>%
   dplyr::group_by(LinjeID,Year) %>%
-  dplyr::summarise(nuGroups=length(totalIndiv[!is.na(totalIndiv) & totalIndiv!=0]),
-                   totalsInfo=sum(totalIndiv,na.rm=T),
-                   groupSize=mean(totalIndiv[!is.na(totalIndiv) & totalIndiv!=0]),
+  dplyr::summarise(nuGroups = length(totalIndiv[!is.na(totalIndiv)]),
+                   totalsInfo = sum(totalIndiv,na.rm=T),
+                   groupSize = mean(totalIndiv,na.rm=T),
                    length = mean(LengdeTaksert,na.rm=T))
 sum(tlDF$totalsInfo,na.rm=T)
-#67946
 
-#insert NA when there is no transect 
+#insert NA when there is no transect but evidence of a survey
 tlDF$length[is.na(tlDF$length)] <- 0
-tlDF$nuGroups[tlDF$length==0] <- NA
+tlDF$nuGroups[tlDF$length==0 ] <- NA
 tlDF$totalsInfo[tlDF$length==0] <- NA
 tlDF$groupSize[tlDF$length==0] <- NA
 summary(tlDF)
-sum(tlDF$length==0)#1302
+sum(tlDF$length==0)
 
 ### get environ data #################################################
 
-bufferData <- readRDS(paste(myfolder,"varDF_allEnvironData_buffers_idiv.rds",sep="/"))
+bufferData <- readRDS(paste(myfolder,
+                            "varDF_allEnvironData_buffers_idiv.rds",sep="/"))
+bufferData <- subset(bufferData, !LinjeID %in% 
+                       c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339,1925))
+
 tlDF <- subset(tlDF, LinjeID %in% bufferData$LinjeID)
+
+siteInfo_ArtsDaten <- readRDS(paste(myfolder,
+                                    "siteInfo_ArtsDaten.rds",sep="/"))
 
 ### make siteInfo ######################################
 
@@ -94,6 +111,17 @@ groupInfo[transectLengths==0] <- NA
 totalsInfo[transectLengths==0] <- NA
 groupSizes[groupSizes==0] <- NA
 sum(as.numeric(totalsInfo),na.rm=T)
+
+#where there is a NA for transect length - put the mean for the line
+#just for imputation purposes
+meanTL = apply(transectLengths,1,median)
+for(i in 1:nrow(transectLengths)){
+  for(j in 1:ncol(transectLengths)){
+    transectLengths[i,j] <- ifelse(transectLengths[i,j]==0,
+                                   meanTL[i],
+                                   transectLengths[i,j])
+  }
+}
 
 #check alignment with other datasets
 all(row.names(groupInfo)==siteInfo_train$siteIndex)
@@ -252,7 +280,7 @@ params <- c("int.d","line.d.sd","year.d.sd","beta")
 
 modelfile <- paste(myfolder,mymodel,sep="/")
 
-n.iterations <- 40000
+n.iterations <- 10000
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1")) 
 
 out1 <- jags(bugs.data, 
@@ -269,15 +297,70 @@ out1 <- jags(bugs.data,
 
 #update to extract cross validation comparisons
 out2 <- update(out1,
-               parameters.to.save = c("mean.expNuIndivs_train","mean.expNuIndivs_test",
-                                      "mean.Density_train","mean.Density_test"),
+               parameters.to.save = c("mid.expNuIndivs_train","mid.expNuIndivs_test"),
                n.iter = 1000)
 
-saveRDS(out2,file=paste0("out_update_",mymodel,"_",fold.id,".rds"))
+#saveRDS(out2,file=paste0("out_update_",mymodel,"_",fold.id,".rds"))
 
-#and save test and training dataset
-saveRDS(totalsInfo,file=paste0("totalsInfo_train_CV_",mymodel,"_",fold.id,".rds"))
-saveRDS(totalsInfo_test,file=paste0("totalsInfo_test_CV_",mymodel,"_",fold.id,".rds"))
+
+### fit #######################################################
+
+library(ggmcmc)
+ggd <- ggs(out2$samples)
+
+#train
+out1_dataset <- subset(ggd,grepl("mid.expNuIndivs_train",ggd$Parameter))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
+
+#get actual NuIndiv
+totalsInfo_mid <- totalsInfo[,6]
+
+#get difference between this value and the simulated values
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
+
+for(i in 1:n.index){
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[!is.na(totalsInfo_mid)] - 
+                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[!is.na(totalsInfo_mid)] - 
+                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)])^2))
+  
+}
+
+summary(mad_dataset)
+summary(rmse_dataset)
+
+saveRDS(summary(mad_dataset),file=paste0("MAD_train_linetransectModel_CV_",task.id,".rds"))
+saveRDS(summary(rmse_dataset),file=paste0("RMSE_train_linetransectModel_CV_",task.id,".rds"))
+
+#test
+out1_dataset <- subset(ggd,grepl("mid.expNuIndivs_test",ggd$Parameter))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
+
+#get actual NuIndiv
+totalsInfo_mid <- totalsInfo_test[,6]
+
+#get difference between this value and the simulated values
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
+
+for(i in 1:n.index){
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[!is.na(totalsInfo_mid)] - 
+                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[!is.na(totalsInfo_mid)] - 
+                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)])^2))
+  
+}
+
+summary(mad_dataset)
+summary(rmse_dataset)
+
+saveRDS(summary(mad_dataset),file=paste0("MAD_test_linetransectModel_CV_",task.id,".rds"))
+saveRDS(summary(rmse_dataset),file=paste0("RMSE_test_linetransectModel_CV_",task.id,".rds"))
 
 ### end ########################################################################
 
