@@ -44,6 +44,7 @@ names(listlengthDF)[which(names(listlengthDF)=="y")] <- "species"
 listlengthDF <- subset(listlengthDF,is.na(month)|(month > 4 & month <10))
 
 #2008 to 2017....
+listlengthDF$Year <- listlengthDF$year
 listlengthDF <- subset(listlengthDF, Year>2007 & Year <=2017) 
 
 ### subset ##########################################################
@@ -140,10 +141,14 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   Effort2_train = listlengthDF_train$short,
                   det.tlp_test = listlengthDF_test$tree_line_position/1000,
                   det.tlp_train = listlengthDF_train$tree_line_position/1000,
+                  det.tlp2_test = listlengthDF_test$tree_line^2/100000,
+                  det.tlp2_train = listlengthDF_train$tree_line^2/100000,
                   det.open_test = listlengthDF_test$Open,
                   det.open_train = listlengthDF_train$Open,
-                  det.bio_test = listlengthDF_test$bio5/100,
-                  det.bio_train = listlengthDF_train$bio5/100,
+                  det.bio5_test = listlengthDF_test$bio5/100,
+                  det.bio5_train = listlengthDF_train$bio5/100,
+                  det.bio6_test = listlengthDF_test$bio6/100,
+                  det.bio6_train = listlengthDF_train$bio6/100,
                   #add an adm effect
                   adm_train = siteInfo_train$admN,
                   det.adm_train = listlengthDF_train$admN,
@@ -174,6 +179,13 @@ siteInfo[,-c(1:10)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:10)])
 siteInfo_test <- subset(siteInfo,grid %in% siteInfo_test$grid)
 siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
 
+#check everything aligns
+siteInfo_test$siteIndex <- listlengthDF_test$siteIndex[match(siteInfo_test$grid,
+                                                             listlengthDF_test$grid)]
+
+siteInfo_train$siteIndex <- listlengthDF_train$siteIndex[match(siteInfo_train$grid,
+                                                             listlengthDF_train$grid)]
+
 ### choose covariates ##########################################################
 
 #standard model
@@ -183,23 +195,27 @@ if(mymodel == "BUGS_occuModel_upscaling_CV.txt"){
   bugs.data$occDM_train <- model.matrix(~ siteInfo_train$tree_line_position +
                                     I(siteInfo_train$tree_line_position^2) +
                                     siteInfo_train$y +
-                                    siteInfo_train$bio1 +
-                                    I(siteInfo_train$bio1^2) +
+                                    siteInfo_train$bio6 +
                                     siteInfo_train$Bog +
+                                    siteInfo_train$Mire +
                                     siteInfo_train$Meadows +
                                     siteInfo_train$ODF +
+                                    I(siteInfo_train$ODF^2) +
                                     siteInfo_train$OSF +
+                                    I(siteInfo_train$OSF^2) +
                                     siteInfo_train$MountainBirchForest)[,-1]
   
   bugs.data$occDM_test <- model.matrix(~ siteInfo_test$tree_line_position +
                                           I(siteInfo_test$tree_line_position^2) +
                                           siteInfo_test$y +
-                                          siteInfo_test$bio1 +
-                                          I(siteInfo_test$bio1^2) +
+                                          siteInfo_test$bio6 +
                                           siteInfo_test$Bog +
+                                          siteInfo_test$Mire +
                                           siteInfo_test$Meadows +
                                           siteInfo_test$ODF +
+                                          I(siteInfo_test$ODF^2) +
                                           siteInfo_test$OSF +
+                                          I(siteInfo_test$OSF^2) +
                                           siteInfo_test$MountainBirchForest)[,-1]
 
   #lasso model or model selection model
@@ -260,7 +276,7 @@ bugs.data$n.covs <- ncol(bugs.data$occDM_test)
 
 ### fit model #######################################################
 
-params <- c("mean.p","beta","beta.effort")
+params <- c("mean.p","mean.psi","beta")
 
 modelfile <- paste(myfolder,mymodel,sep="/")
 
@@ -268,7 +284,7 @@ modelfile <- paste(myfolder,mymodel,sep="/")
 #n.cores = 3
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
 
-n.iterations = 20000
+n.iterations = 10000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -286,7 +302,7 @@ summary(out1$Rhat$beta)
 out2 <- update(out1,
                parameters.to.save = c("mid.z_train","mid.psi_train","Py_train",
                                       "mid.z_test","mid.psi_test","Py_test"),
-               n.iter = 1000)
+               n.iter = 2000)
 
 ### AUC check ############################################################
 
@@ -297,7 +313,7 @@ ggd2 <- ggs(out2$samples)
 
 #test 
 Py_preds <- subset(ggd2,grepl("Py_test",ggd2$Parameter))
-Py_preds$Iteration <- as.numeric(factor(paste(Py_preds$Iteration,Py_preds$Chain)))
+Py_preds$Iteration <- as.numeric(interaction(Py_preds$Iteration,Py_preds$Chain))
 nu_Iteractions <- max(Py_preds$Iteration)
 head(Py_preds)
 
@@ -308,8 +324,11 @@ for (i in 1:nu_Iteractions){
   
   py.vals <- Py_preds$value[Py_preds$Iteration==i]
   
-  pred <- ROCR::prediction(py.vals, 
-                           bugs.data$y_test)
+  #select data
+  useData <- bugs.data$year_test==6
+  
+  pred <- ROCR::prediction(py.vals[useData], 
+                           bugs.data$y_test[useData])
   
   #get AUC
   perf <- ROCR::performance(pred, "auc")
@@ -332,8 +351,11 @@ for (i in 1:nu_Iteractions){
   
   py.vals <- Py_preds$value[Py_preds$Iteration==i]
   
-  pred <- ROCR::prediction(py.vals, 
-                     bugs.data$y_train)
+  #select data
+  useData <- bugs.data$year_train==6
+  
+  pred <- ROCR::prediction(py.vals[useData], 
+                     bugs.data$y_train[useData])
   
   #get AUC
   perf <- ROCR::performance(pred, "auc")
@@ -350,6 +372,7 @@ summary(AUC_py_train)
 Preds <- subset(ggd2,grepl("mid.psi_test",ggd2$Parameter))
 Z_Preds <- subset(ggd2,grepl("mid.z_test",ggd2$Parameter))
 Preds$Iteration <- as.numeric(factor(paste(Preds$Iteration,Preds$Chain)))
+Z_Preds$Iteration <- as.numeric(interaction(Z_Preds$Iteration,Z_Preds$Chain))
 nu_Iteractions <- max(Preds$Iteration)
 head(Preds)
 
@@ -359,7 +382,7 @@ AUC_psi_test <- rep(NA, nu_Iteractions)
 for (i in 1:nu_Iteractions){
   
   psi.vals <- Preds$value[Preds$Iteration==i]
-  z.vals <- Z_Preds$value[Preds$Iteration==i]
+  z.vals <- Z_Preds$value[Z_Preds$Iteration==i]
   
   pred <- ROCR::prediction(psi.vals, z.vals)
   
@@ -376,6 +399,7 @@ summary(AUC_psi_test)
 Preds <- subset(ggd2,grepl("mid.psi_train",ggd2$Parameter))
 Z_Preds <- subset(ggd2,grepl("mid.z_train",ggd2$Parameter))
 Preds$Iteration <- as.numeric(factor(paste(Preds$Iteration,Preds$Chain)))
+Z_Preds$Iteration <- as.numeric(interaction(Z_Preds$Iteration,Z_Preds$Chain))
 nu_Iteractions <- max(Preds$Iteration)
 head(Preds)
 
@@ -385,7 +409,7 @@ AUC_psi_train <- rep(NA, nu_Iteractions)
 for (i in 1:nu_Iteractions){
   
   psi.vals <- Preds$value[Preds$Iteration==i]
-  z.vals <- Z_Preds$value[Preds$Iteration==i]
+  z.vals <- Z_Preds$value[Z_Preds$Iteration==i]
   
   pred <- ROCR::prediction(psi.vals, z.vals)
   
