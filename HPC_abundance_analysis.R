@@ -29,21 +29,43 @@ allData$LengdeTaksert[which(allData$LinjeID==1405&allData$LengdeTaksert==1100)] 
 #LinjeID 1925 has twice as high counts as all others
 allData <- subset(allData, LinjeID!=1925)
 
+#remove LinjeID 131?? -only 503 m long - smallest transect
+
 #drop lines visited in less than 5 years - see below
 allData <- subset(allData, !LinjeID %in% 
                     c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339))
+
+
+### plot data #######################################################
+
+#get lines as a spatial object
+# library(sf)
+# library(tmap)
+# 
+# Lines_spatial <- readRDS("data/Lines_spatial.rds")
+# Lines_spatial <- subset(Lines_spatial, LinjeID %in% allData$LinjeID)
+# Lines_spatial <-st_as_sf(Lines_spatial)
+# Lines_spatial <- st_transform(Lines_spatial, st_crs(NorwayOrigProj))
+# 
+# occ_tmap <- tm_shape(NorwayOrigProj) + 
+#    tm_borders() +
+#  tm_shape(Lines_spatial)+
+#    tm_lines(col="skyblue4",lwd=2)
+# occ_tmap
+# 
+# saveRDS(occ_tmap,"plots/transects.RDS")
+
 
 ### aggregate data to the lines ######################################
 
 #Get statistics per year and line
 tlDF <- allData %>%
   dplyr::group_by(LinjeID,Year) %>%
-  dplyr::summarise(nuGroups=length(totalIndiv[!is.na(totalIndiv)]),
-                   totalsInfo=sum(totalIndiv,na.rm=T),
-                   groupSize=mean(totalIndiv,na.rm=T),
+  dplyr::summarise(nuGroups = length(totalIndiv[!is.na(totalIndiv)]),
+                   totalsInfo = sum(totalIndiv,na.rm=T),
+                   groupSize = mean(totalIndiv,na.rm=T),
                    length = mean(LengdeTaksert,na.rm=T))
 sum(tlDF$totalsInfo,na.rm=T)
-
 
 #insert NA when there is no transect but evidence of a survey
 tlDF$length[is.na(tlDF$length)] <- 0
@@ -56,18 +78,27 @@ sum(tlDF$length==0)
 #### outlier check ##################################################
 
 #row/siteIndex 423 is an outlier/LinejeID 1925
-# tlDF %>%
+# summaryData <- tlDF %>%
 #     group_by(LinjeID) %>%
-#     summarise(med = median(totalsInfo,na.rm=T),transectlength=mean(length,na.rm=T)) %>%
+#     summarise(med = median(totalsInfo,na.rm=T),
+#               medDensity = median(totalsInfo/length,na.rm=T),
+#               transectlength=mean(length,na.rm=T),
+#               nuObsYears = length(unique(Year[!totalsInfo==0 & !is.na(totalsInfo)])),
+#               nuYears = length(unique(Year[!is.na(totalsInfo)])),
+#               propObsYears = nuObsYears/nuYears) %>%
 #     arrange(desc(med))
-# #remove this line
+# 
+# qplot(summaryData$transectlength,summaryData$medDensity)
+# qplot(summaryData$nuYears,summaryData$medDensity)
+# 
+# subset(summaryData,propObsYears<0.3)
 # 
 # tlDF %>%
 #   group_by(LinjeID) %>%
 #   summarise(nuYears = sum(!is.na(totalsInfo))) %>%
 #   arrange(nuYears) %>%
 #   filter(nuYears <5)
-#15 line
+# #15 line
 
 ### get environ data #################################################
 
@@ -100,7 +131,19 @@ transectLengths <- reshape2::acast(tlDF,siteIndex~Year,value.var="length")
 #put NAs where transect length is zero
 groupInfo[transectLengths==0] <- NA
 totalsInfo[transectLengths==0] <- NA
+groupSizes[groupSizes==0] <- NA
 sum(as.numeric(totalsInfo),na.rm=T)
+
+#where there is a NA for transect length - put the mean for the line
+#just for imputation purposes
+meanTL = apply(transectLengths,1,median)
+for(i in 1:nrow(transectLengths)){
+  for(j in 1:ncol(transectLengths)){
+    transectLengths[i,j] <- ifelse(transectLengths[i,j]==0,
+                                   meanTL[i],
+                                   transectLengths[i,j])
+  }
+}
 
 #check alignment with other datasets
 all(row.names(groupInfo)==siteInfo$siteIndex)
@@ -129,6 +172,9 @@ allDetections$admN <- siteInfo$admN[match(allDetections$LinjeID,
 siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrouped,
                                                       siteInfo$adm)]
   
+#use raw data as predictor in model on sigma
+groupSizes[is.na(groupSizes)] <- median(groupSizes,na.rm=T)
+
 ### line-transect index ########################################
 
 #remember: some lines are given the same siteIndex (when they overlap in the same grid)
@@ -239,7 +285,7 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
 ### indicator model selection ################################
 
 #all linear and select quadratic
-} else if (mymodel == "linetransectModel_variables_ModelSelection.txt"){ 
+} else { 
   
 bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
@@ -292,62 +338,7 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   I(siteInfo_ArtsDaten$Mire^2) +
                                   I(siteInfo_ArtsDaten$SnowBeds^2))[,-1]
 
-### lasso model ##############################################
-
-} else if (mymodel == "linetransectModel_variables_LASSO.txt"){
-
-#all linear and select quadratic
-bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
-                                    bufferData$bio5 +
-                                    bufferData$y +
-                                    bufferData$distCoast +
-                                    bufferData$tree_line +
-                                    bufferData$MountainBirchForest +
-                                    bufferData$Bog +
-                                    bufferData$ODF +
-                                    bufferData$Meadows +
-                                    bufferData$OSF +
-                                    bufferData$Mire +
-                                    bufferData$SnowBeds +
-                                    I(bufferData$bio6^2) +
-                                    I(bufferData$bio5^2) +
-                                    I(bufferData$y^2) +
-                                    I(bufferData$distCoast^2) +
-                                    I(bufferData$tree_line^2) +
-                                    I(bufferData$MountainBirchForest^2) +
-                                    I(bufferData$Bog^2) +
-                                    I(bufferData$ODF^2) +
-                                    I(bufferData$Meadows^2) +
-                                    I(bufferData$OSF^2) +
-                                    I(bufferData$Mire^2) +
-                                    I(bufferData$SnowBeds^2))[,-1]
-  
-# #predictions to full grid
-bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
-                                     siteInfo_ArtsDaten$bio5 +
-                                     siteInfo_ArtsDaten$y +
-                                     siteInfo_ArtsDaten$distCoast +
-                                     siteInfo_ArtsDaten$tree_line +
-                                     siteInfo_ArtsDaten$MountainBirchForest +
-                                     siteInfo_ArtsDaten$Bog +
-                                     siteInfo_ArtsDaten$ODF +
-                                     siteInfo_ArtsDaten$Meadows +
-                                     siteInfo_ArtsDaten$OSF +
-                                     siteInfo_ArtsDaten$Mire +
-                                     siteInfo_ArtsDaten$SnowBeds +
-                                     I(siteInfo_ArtsDaten$bio6^2) +
-                                     I(siteInfo_ArtsDaten$bio5^2) +
-                                     I(siteInfo_ArtsDaten$y^2) +
-                                     I(siteInfo_ArtsDaten$distCoast^2) +
-                                     I(siteInfo_ArtsDaten$tree_line^2) +
-                                     I(siteInfo_ArtsDaten$MountainBirchForest^2) +
-                                     I(siteInfo_ArtsDaten$Bog^2) +
-                                     I(siteInfo_ArtsDaten$ODF^2) +
-                                     I(siteInfo_ArtsDaten$Meadows^2) +
-                                     I(siteInfo_ArtsDaten$OSF^2) +
-                                     I(siteInfo_ArtsDaten$Mire^2) +
-                                     I(siteInfo_ArtsDaten$SnowBeds^2))[,-1]
-}
+} 
 
 
 # myvars <- c("y",'bio6',"bio6_2","distCoast","distCoast_2",
@@ -371,10 +362,10 @@ library(jagsUI)
 
 params <- c("int.d","beta","g",
             "b.group.size","meanESW","random.d.line",
-            "meanDensity","Density",
-            "fit","fit.new",
-            "NuIndivs.j","NuIndivs.new.j",
-            "expNuIndivs","exp.j")
+            "meanDensity","Density.p",
+            "bpv",
+            "NuIndivs.j","NuIndivs.new.j","exp.j",
+            "mid.expNuIndivs")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
@@ -386,18 +377,56 @@ modelfile <- paste(myfolder,mymodel,sep="/")
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1")) 
 #n.cores = 3
 
+n.iterations = 8000
+
 out1 <- jags(bugs.data, 
              inits=NULL, 
              params, 
              modelfile, 
              n.thin=10,
              n.chains=n.cores, 
-             n.burnin=10000,
-             n.iter=20000,
+             n.burnin=n.iterations/2,
+             n.iter=n.iterations,
              parallel=T)
 
-saveRDS(out1,file=paste0("out_linetransectModel_variables_",task.id,".rds"))
 saveRDS(out1$summary,file=paste0("outSummary_linetransectModel_variables_",task.id,".rds"))
 
+### fit #######################################################
+
+library(ggmcmc)
+
+ggd <- ggs(out1$samples)
+out1_dataset <- subset(ggd,grepl("mid.expNuIndivs",ggd$Parameter))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
+
+#get actual NuIndiv
+totalsInfo_mid <- bugs.data$NuIndivs[,6]
+
+#get difference between this value and the simulated values
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
+
+for(i in 1:n.index){
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[!is.na(totalsInfo_mid)] - 
+                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[!is.na(totalsInfo_mid)] - 
+                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)])^2))
+  
+}
+
+summary(mad_dataset)
+summary(rmse_dataset)
+
+saveRDS(summary(mad_dataset),file=paste0("MAD_linetransectModel_variables_",task.id,".rds"))
+saveRDS(summary(rmse_dataset),file=paste0("RMSE_linetransectModel_variables_",task.id,".rds"))
+
+### get site and year predictions ############################
+
+out2 <- update(out1, parameters.to.save = c("Density.pt"),n.iter=2000)
+ggd <- ggs(out2$samples)
+saveRDS(ggd,file=paste0("Density.pt_linetransectModel_variables_",task.id,".rds"))
+        
 ### end #######################################################
 
