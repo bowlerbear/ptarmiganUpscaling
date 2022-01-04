@@ -1,4 +1,4 @@
-#run half of the HPC_linetransect_combinedModel_Buffer.R script
+siteInfo_ArtsDaten <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 head(siteInfo_ArtsDaten)
 
@@ -31,7 +31,7 @@ lineBuffers_to_grids5km <- subset(lineBuffers_to_grids,!duplicated(LinjeID))
 nrow(lineBuffers_to_grids5km)#13
 siteInfo$grid_5km <- lineBuffers_to_grids5km$grid[match(siteInfo$LinjeID,lineBuffers_to_grids5km$LinjeID)]
 
-#other overlapping gruds within 15km _these are in islands in the north and in Sweden (see linetransect_Buffers.R)
+#other overlapping grids within 15km _these are in islands in the north and in Sweden 
 missing <- missing[!missing %in% lineBuffers_to_grids5km$LinjeID]
 lineBuffers_to_grids <- readRDS("data/lineBuffers_to_grids_15km.rds")
 lineBuffers_to_grids <- subset(lineBuffers_to_grids, LinjeID %in% missing)
