@@ -19,16 +19,17 @@ vignettes/*.pdf
 # knitr and R markdown default cache directories
 /*_cache/
 /cache/
+
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
 .Rproj.user
 #plots
 *.png
-Marina/*
 literature/*
 ms/*
 old/*
-sims/*
 data/*
+plots/*
 model-outputs/*
+models/old*
