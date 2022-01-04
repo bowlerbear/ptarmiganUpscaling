@@ -19,7 +19,7 @@
     sig2.df[i] <- sig.df[i]*sig.df[i]
     
     # effective strip width
-    esw[i] <- sqrt(pi * sig2.df[i] / 2) 
+    esw[i] <- sqrt(pi * sig2.df[i] / 2) #page 66 Buckland
     f0[i] <- 1/esw[i] #assuming all detected on the line
     
     # LIKELIHOOD
@@ -60,13 +60,13 @@
     }
     
     #random year/line effect
-    yearline.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
-    yearline.d.tau <- pow(yearline.d.sd,-2)
-    for(j in 1:nsiteAll){
-      for(t in 1:nyear){
-        random.d.yearline[j,t] ~ dnorm(0,yearline.d.tau)
-      }
-    }
+    #yearline.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    #yearline.d.tau <- pow(yearline.d.sd,-2)
+    #for(j in 1:nsiteAll){
+    #  for(t in 1:nyear){
+    #    random.d.yearline[j,t] ~ dnorm(0,yearline.d.tau)
+    #  }
+    #}
     
     #random adm effect
     adm.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
@@ -76,13 +76,13 @@
     }
     
     #random year/adm effect
-    yearadm.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
-    yearadm.d.tau <- pow(yearadm.d.sd,-2)
-    for(j in 1:nadm){
-      for(t in 1:nyear){
-        random.d.yearadm[j,t] ~ dnorm(0,yearadm.d.tau)
-      }
-    }
+    #yearadm.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    #yearadm.d.tau <- pow(yearadm.d.sd,-2)
+    #for(j in 1:nadm){
+    #  for(t in 1:nyear){
+    #    random.d.yearadm[j,t] ~ dnorm(0,yearadm.d.tau)
+    #  }
+    #}
     
     #random year effect
     year.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
@@ -143,9 +143,9 @@
                             inprod(beta[],occDM[j,]) +
                             random.d.adm[adm[j]]+
                             random.d.transect[j] +
-                            random.d.line[siteAll[j]] +
-                            random.d.yearline[siteAll[j],t] +
-                            random.d.yearadm[adm[j],t]
+                            random.d.line[siteAll[j]] 
+                            #random.d.yearline[siteAll[j],t] +
+                            #random.d.yearadm[adm[j],t]
                             
                             
 
@@ -155,6 +155,7 @@
     #predict observations - original scale and density scale
     for(j in 1:nsite){
       meanDensity[j] <- mean(Density.jt[j,])
+      mid.expNuIndivs[j] <- expNuIndivs[j,6]
       
     }
   
@@ -163,18 +164,20 @@
       for(t in 1:nyear){
       
       #for each grid
-      log(Density.km.jt[j,t]) <- int.d + 
+      log(Density.km.pt[j,t]) <- int.d + 
                             inprod(beta[],predDM[j,]) + 
                             random.d.adm[pred.adm[j]] +
                             random.d.line[j] +
-                            random.d.year[t] +
-                            random.d.yearline[j,t]+
-                            random.d.yearadm[pred.adm[j],t]
+                            random.d.year[t] 
+                            #random.d.yearline[j,t]+
+                            #random.d.yearadm[pred.adm[j],t]
+                            
+      Density.pt[j,t] <- Density.km.pt[j,t]*25
                             
       }
       
-      Density.km[j] <- mean(Density.km.jt[j,])#mean per year
-      Density[j] <- Density.km[j]*25 # since there are 25 km per grid
+      Density.km.p[j] <- mean(Density.km.pt[j,])#mean per year
+      Density.p[j] <- Density.km.p[j]*25 # since there are 25 km per grid
     }
 
     #totalPop <- sum(Density)
@@ -211,7 +214,10 @@
     
     # Add up discrepancy measures for entire data set
       fit <- sum(chi2[])                     
-      fit.new <- sum(chi2.new[])             
+      fit.new <- sum(chi2.new[])  
+      
+      test <- step(fit.new-fit) 	
+      bpv <- mean(test)
     
     }
     

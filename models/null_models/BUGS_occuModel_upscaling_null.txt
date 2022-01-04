@@ -26,6 +26,9 @@
                       
     #Create simulated dataset to calculate the Bayesian p-value
     y.sim[j] ~ dbern(Py[j]) #data is Y
+    
+     #also create predicted p (p x psi instead of z)
+    Py.pred[j] <- p[j] * muZ[site[j],year[j]]
                       
     }
   
@@ -78,7 +81,10 @@
     
     # Add up individual chi2 values for overall fit statistic
     fit <- sum(chi2)  
-    fit.new <- sum(chi2.sim)       
+    fit.new <- sum(chi2.sim)   
+    
+    test <- step(fit.new-fit) 	
+    bpv <- mean(test)
       
 
   #Priors 

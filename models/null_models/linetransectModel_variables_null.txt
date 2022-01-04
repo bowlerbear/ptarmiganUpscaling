@@ -67,14 +67,29 @@
       
       #linear predictor on density
         log(Density.jt[j,t]) <- int.d
-                            
+        
     }}
     
     #predict observations - original scale and density scale
     for(j in 1:nsite){
       meanDensity[j] <- mean(Density.jt[j,])
-      meanESW[j] <- mean(predESW[j,])
+      mid.expNuIndivs[j] <- expNuIndivs[j,6]
+    }
+  
+  
+    #mean density at grids across Norway
+    for(j in 1:n.preds){
+      for(t in 1:nyear){
       
+      #for each grid
+      log(Density.km.pt[j,t]) <- int.d 
+      
+      Density.pt[j,t] <- Density.km.pt[j,t]*25
+                            
+      }
+      
+      Density.km.p[j] <- mean(Density.km.pt[j,])#mean per year
+      Density.p[j] <- Density.km.p[j]*25 # since there are 25 km per grid
     }
   
     #calculate the Bayesian p-value - at the site-level
@@ -113,7 +128,10 @@
     
     # Add up discrepancy measures for entire data set
       fit <- sum(chi2[])                     
-      fit.new <- sum(chi2.new[])             
+      fit.new <- sum(chi2.new[])  
+      
+      test <- step(fit.new-fit) 	
+      bpv <- mean(test)
     
     }
     

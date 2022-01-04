@@ -126,16 +126,14 @@
       }
     }
  
-    #pull out mean data
+    #pull out mid data
     
     for(j in 1:nsite_train){
-      mean.Density_train[j] <- sum(Density.jt[j,1:nyear])/nyear
-      mean.expNuIndivs_train[j] <- sum(expNuIndivs[j,1:nyear])/nyear
+      mid.expNuIndivs_train[j] <- expNuIndivs[j,6]
     }
     
      for(j in 1:nsite_test){
-      mean.Density_test[j] <- sum(Density.jt_test[j,1:nyear])/nyear
-      mean.expNuIndivs_test[j] <- sum(expNuIndivs_test[j,1:nyear])/nyear
+      mid.expNuIndivs_test[j] <- expNuIndivs_test[j,6]
     }
     
     

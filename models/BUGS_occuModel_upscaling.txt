@@ -11,8 +11,8 @@
       logit(muZ[i,t]) <- int.alpha + inprod(beta[],occDM[i,]) + 
                           random.adm[adm[i]] + 
                           eta[i]+
-                          random.year[t]+
-                          random.admyear[adm[i],t] 
+                          random.year[t]
+                          #random.admyear[adm[i],t] 
     }
     
       muZ.i[i] <- mean(muZ[i,])
@@ -39,6 +39,9 @@
                       
     #Create simulated dataset to calculate the Bayesian p-value
     y.sim[j] ~ dbern(Py[j]) #data is Y
+    
+     #also create predicted p (p x psi instead of z)
+    Py.pred[j] <- p[j] * muZ[site[j],year[j]]
                       
     }
   
@@ -93,6 +96,8 @@
     fit <- sum(chi2)  
     fit.new <- sum(chi2.sim)       
       
+    test <- step(fit.new-fit) 	
+    bpv <- mean(test)
 
   #Priors 
 
@@ -131,13 +136,13 @@
     
     
     #adm year effects
-    for(i in 1:n.adm){
-      for(t in 1:nyear){
-        random.admyear[i,t] ~ dnorm(0,random.admyear.tau)
-      }
-    }
-    random.admyear.tau <- pow(random.admyear.sd,-2)
-    random.admyear.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
+    #for(i in 1:n.adm){
+    #  for(t in 1:nyear){
+    #    random.admyear[i,t] ~ dnorm(0,random.admyear.tau)
+    #  }
+    #}
+    #random.admyear.tau <- pow(random.admyear.sd,-2)
+    #random.admyear.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
 
     #Observation model priors
     ##########################
@@ -164,7 +169,7 @@
     for(i in 1:n.adm){
       random.det.adm[i] ~ dnorm(0,random.det.adm.tau)
     }
-    random.det.adm.tau <- pow(random.adm.sd,-2)
+    random.det.adm.tau <- pow(random.det.adm.sd,-2)
     random.det.adm.sd ~ dt(0, pow(2.5,-2), 1)T(0,) 
 
 

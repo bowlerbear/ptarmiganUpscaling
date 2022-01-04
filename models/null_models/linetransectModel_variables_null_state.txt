@@ -82,6 +82,7 @@
     #predict observations - original scale and density scale
     for(j in 1:nsite){
       meanDensity[j] <- mean(Density.jt[j,])
+      mid.expNuIndivs[j] <- expNuIndivs[j,6]
       
     }
   
@@ -90,12 +91,14 @@
       for(t in 1:nyear){
       
       #for each grid
-      log(Density.km.jt[j,t]) <- int.d 
+      log(Density.km.pt[j,t]) <- int.d 
+      
+      Density.pt[j,t] <- Density.km.pt[j,t]*25
                             
       }
       
-      Density.km[j] <- mean(Density.km.jt[j,])#mean per year
-      Density[j] <- Density.km[j]*25 # since there are 25 km per grid
+      Density.km.p[j] <- mean(Density.km.pt[j,])#mean per year
+      Density.p[j] <- Density.km.p[j]*25 # since there are 25 km per grid
     }
 
     #totalPop <- sum(Density)
@@ -132,7 +135,10 @@
     
     # Add up discrepancy measures for entire data set
       fit <- sum(chi2[])                     
-      fit.new <- sum(chi2.new[])             
+      fit.new <- sum(chi2.new[])    
+      
+      test <- step(fit.new-fit) 	
+      bpv <- mean(test)
     
     }
     
