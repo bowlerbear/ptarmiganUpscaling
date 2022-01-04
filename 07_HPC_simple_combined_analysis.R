@@ -10,9 +10,9 @@ out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rd
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
 
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_1.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_2.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates/outSummary_occModel_upscaling_3.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/outSummary_occModel_upscaling_1.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/outSummary_occModel_upscaling_2.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/outSummary_occModel_upscaling_3.rds")
 
 
 #extract part of output we want
@@ -32,6 +32,9 @@ out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_lin
 out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_2.rds")
 out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_3.rds")
 
+out1 <- readRDS("model-outputs/SLURM/distanceModel/full_linetransect_random/outSummary_linetransectModel_variables_1.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/full_linetransect_random/outSummary_linetransectModel_variables_2.rds")
+out1 <- readRDS("model-outputs/SLURM/distanceModel/full_linetransect_random/outSummary_linetransectModel_variables_3.rds")
 
 #extract part of output we want
 out1 <- data.frame(out1)
@@ -79,7 +82,7 @@ library(jagsUI)
 params <- c("totalAbund","realAbund")
 
 #modelfile <- paste(myfolder,"simpleCombinedModel.txt",sep="/")
-modelfile <- paste("models","simpleCombinedModel.txt",sep="/")
+modelfile <- paste("models","CombinedModel_simple.txt",sep="/")
 
 out1 <- jags(bugs.data, 
              inits=NULL, 
@@ -127,6 +130,7 @@ ggplot(all_ggd, aes(x = value, y = Model)) + geom_density_ridges2()+
   theme_minimal()+xlab("Total population size")
 
 quantile(ggd$value,c(0.025,0.5,0.975))
+
 ### compare #############################################
 
 summary(ggd$value)
