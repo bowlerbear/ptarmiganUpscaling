@@ -53,6 +53,8 @@ library(blockCV)
 library(raster)
 library(sf)
 library(plyr)
+library(ggthemes)
+library(ggplot2)
 
 #create grid
 equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
@@ -83,7 +85,7 @@ siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data
 #make each variable column a grid
-myVars <- names(siteInfo)[c(12:24,30:36,39:40)]
+myVars <- names(siteInfo)[c(14:26,32:34,40:42)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
@@ -177,8 +179,8 @@ length(folds)
 
 #plot the folds
 siteInfo$folds <- factor(sb$foldID)
-g1 <- ggplot2::qplot(x, y, data=siteInfo, colour=folds)+
-  theme_bw()
+g1 <- qplot(x, y, data=siteInfo, colour=folds) + theme_void()+
+  theme(legend.position = "top")
 g1
 
 #random
@@ -198,7 +200,7 @@ library(blockCV)
 siteInfo <- readRDS("data/siteInfo_ArtsDaten.rds")
 
 # import raster data for whole country
-myVars <- names(siteInfo)[c(12:24,30:36,39:40)]
+myVars <- names(siteInfo)[c(14:26,32:34,40:42)]
 myRasters <- list()
 for(i in 1:length(myVars)){
   temp <- mygrid
