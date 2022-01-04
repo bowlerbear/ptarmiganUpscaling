@@ -55,6 +55,35 @@ varDF <- readRDS(paste(myfolder,"varDF_allEnvironData_5km_idiv.rds",sep="/"))
 listlengthDF <- subset(listlengthDF,grid %in% focusGrids)
 listlengthDF <- subset(listlengthDF,grid %in% varDF$grid)
 
+### plot data #######################################################
+
+# #presences
+# 
+# listlengthDF_Positive <- subset(listlengthDF, y==1)
+# listlengthDF_Positive <- subset(listlengthDF_Positive, !duplicated(grid))
+# 
+# mygrid[] <- NA
+# mygrid[listlengthDF_Positive $grid] <- listlengthDF_Positive$y
+# crs(mygrid) <- equalM
+# occ_tmap <- tm_shape(NorwayOrigProj) +
+#   tm_borders() +
+# tm_shape(mygrid)+
+#   tm_raster(title="Occupancy", legend.show = FALSE)
+# saveRDS(occ_tmap,"plots/occupancy_raw_presences.RDS")
+# 
+# #absences
+# listlengthDF_Abs<- subset(listlengthDF, y==0)
+# listlengthDF_Abs <- subset(listlengthDF_Abs, !duplicated(grid))
+# 
+# mygrid[] <- NA
+# mygrid[listlengthDF_Abs$grid] <- listlengthDF_Abs$y
+# crs(mygrid) <- equalM
+# occ_tmap <- tm_shape(NorwayOrigProj) + 
+#   tm_borders() +
+#   tm_shape(mygrid)+
+#   tm_raster(title="Occupancy", palette="YlGnBu", legend.show = FALSE)
+# saveRDS(occ_tmap,"plots/occupancy_raw_absences.RDS")
+
 ### Absences ###################################################################
 
 #the dataset contains missing values
@@ -121,6 +150,12 @@ length(unique(listlengthDF$grid))
 
 ### BUGS object ################################################################
 
+myScale <- function(x){
+  
+  as.numeric(scale(x))
+  
+}
+
 #for BUGS
 
 bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
@@ -132,11 +167,11 @@ bugs.data <- list(nsite = length(unique(listlengthDF$siteIndex)),
                   #detection covariates
                   Effort = listlengthDF$singleton,
                   Effort2 = listlengthDF$short,
-                  det.tlp = listlengthDF$tree_line/100,
-                  det.tlp2 = listlengthDF$tree_line^2/100000,
-                  det.open = listlengthDF$Open,
-                  det.bio5 = listlengthDF$bio5/100,
-                  det.bio6 = listlengthDF$bio6/100,
+                  det.tlp = myScale(listlengthDF$tree_line/100),
+                  det.tlp2 = myScale(listlengthDF$tree_line^2/100000),
+                  det.open = myScale(listlengthDF$Open),
+                  det.bio5 = myScale(listlengthDF$bio5/100),
+                  det.bio6 = myScale(listlengthDF$bio6/100),
                   #add an adm effect
                   adm = siteInfo$admN,
                   det.adm = listlengthDF$admN,
@@ -204,8 +239,8 @@ if(mymodel == "BUGS_occuModel_upscaling.txt"){
 bugs.data$occDM <- model.matrix(~ siteInfo$tree_line_position +
                                    I(siteInfo$tree_line_position^2) +
                                    siteInfo$y +
+                                   siteInfo$bio6 +
                                    siteInfo$Bog +
-                                   I(siteInfo$Bog^2) +
                                    siteInfo$Mire +
                                    siteInfo$Meadows +
                                    siteInfo$ODF +
@@ -266,7 +301,9 @@ bugs.data$n.covs <- ncol(bugs.data$occDM)
 params <- c("beta","g",
             "average.p","average.psi","propOcc",
             "beta.effort","beta.effort2",
-            "beta.det.open","beta.det.bio","beta.det.tlp",
+            "beta.det.open","beta.det.bio5","beta.det.bio6",
+            "beta.det.tlp","beta.det.tlp2",
+            "bpv",
             "grid.z","grid.psi")
 
 #chosen already earlier
@@ -279,7 +316,7 @@ modelfile <- paste(myfolder,mymodel,sep="/")
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
 #n.cores = 3
 
-n.iterations = 20000
+n.iterations = 10000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -293,10 +330,121 @@ out1 <- jags(bugs.data,
 
 saveRDS(out1$summary,file=paste0("outSummary_occModel_upscaling_",task.id,".rds"))
 
+### get AUC ##########################################################
+
 #update by a small number and get full model
-out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py", 
-                                            "e.count","sim.count",
-                                            "fit","fit.new"),n.iter=1000)
+out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py","Py.pred"),n.iter=2000)
 
-saveRDS(out2,file=paste0("out_update_occModel_upscaling_",task.id,".rds"))
+library(ggmcmc)
+ggd2 <- ggs(out2$samples)
 
+#Z against psi
+Preds <- subset(ggd2,grepl("mid.psi",ggd2$Parameter))
+Preds$Iteration <- as.numeric(interaction(Preds$Iteration,Preds$Chain))
+Z_Preds <- subset(ggd2,grepl("mid.z",ggd2$Parameter))
+Z_Preds$Iteration <- as.numeric(interaction(Z_Preds$Iteration,Z_Preds$Chain))
+nu_Iteractions <- max(Preds$Iteration)
+head(Preds)
+
+#look through all iterations
+AUC_psi <- rep(NA, nu_Iteractions)
+TSS_psi <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  psi.vals <- Preds$value[Preds$Iteration==i]
+  z.vals <- Z_Preds$value[Z_Preds$Iteration==i]
+  
+  pred <- ROCR::prediction(psi.vals, z.vals)
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_psi[i] <- perf@y.values[[1]]
+  
+  #get TSS
+  tp_perf <- ROCR::performance(pred, "tpr")
+  tn_perf <- ROCR::performance(pred, "tnr")
+  TSS_psi[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
+  
+  
+}
+
+summary(AUC_psi)
+saveRDS(summary(AUC_psi),file=paste0("AUC_psi_occModel_upscaling_",task.id,".rds"))
+saveRDS(summary(TSS_psi),file=paste0("TSS_psi_occModel_upscaling_",task.id,".rds"))
+
+
+#Y against Py - pull out one year
+Py_preds <- subset(ggd2,grepl("Py",ggd2$Parameter))
+Py_preds <- subset(Py_preds,!grepl("Py.pred",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(interaction(Py_preds$Iteration,Py_preds$Chain))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_py <- rep(NA, nu_Iteractions)
+TSS_py <- rep(NA, nu_Iteractions)
+              
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  #select data
+  useData <- !is.na(bugs.data$y) & bugs.data$year==6
+  
+  pred <- ROCR::prediction(py.vals[useData],bugs.data$y[useData])
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_py[i] <- perf@y.values[[1]]
+  
+  #get TSS
+  tp_perf <- ROCR::performance(pred, "tpr")
+  tn_perf <- ROCR::performance(pred, "tnr")
+  TSS_py[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
+  
+}
+
+summary(AUC_py)
+saveRDS(summary(AUC_py),file=paste0("AUC_py_occModel_upscaling_",task.id,".rds"))
+saveRDS(summary(TSS_py),file=paste0("TSS_py_occModel_upscaling_",task.id,".rds"))
+
+
+#Y against Py_pred (psi x p) - pull out one year
+Py_preds <- subset(ggd2,grepl("Py.pred",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(interaction(Py_preds$Iteration,Py_preds$Chain))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_py <- rep(NA, nu_Iteractions)
+TSS_py <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  #select data
+  useData <- !is.na(bugs.data$y) & bugs.data$year==6
+  
+  pred <- ROCR::prediction(py.vals[useData],bugs.data$y[useData])
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_py[i] <- perf@y.values[[1]]
+  
+  #get TSS
+  tp_perf <- ROCR::performance(pred, "tpr")
+  tn_perf <- ROCR::performance(pred, "tnr")
+  TSS_py[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
+  
+}
+
+saveRDS(summary(AUC_py),file=paste0("AUC_pypred_occModel_upscaling_",task.id,".rds"))
+saveRDS(summary(TSS_py),file=paste0("TSS_pypred_occModel_upscaling_",task.id,".rds"))
+
+### get full z and psi ##########################################################
+
+out2 <- update(out1, parameters.to.save = c("z"),n.iter=3000)
+ggd <- ggs(out2$samples)
+saveRDS(ggd,file=paste0("Z_occModel_upscaling_",task.id,".rds"))
