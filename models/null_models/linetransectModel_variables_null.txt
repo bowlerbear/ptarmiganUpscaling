@@ -101,34 +101,35 @@
         #expected value of model
         exp[j,t] <- (r*(1-p[j,t]))/p[j,t]
         
-        #New samples
+        #new samples
         NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
         
       }
-      #expectations of the model
-      exp.j[j] <- mean(exp[j,])
-      #mean.expNuIndivs[j] <- mean(expNuIndivs[j,])#this is the same as the previous line
-      
-      NuIndivs.j[j] <- mean(NuIndivs[j,])#mean of raw data
-      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])#mean of simulated values
     }
     
     e <- 0.0001
     
-    #do discrepancy at the site-level
+    #do discrepancy 
     for(j in 1:nsite){
+      for(t in 1:nyear){
         
         #compared to data
-        chi2[j] <- pow((NuIndivs.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e)
+        chi2[j,t] <- pow((NuIndivs[j,t] - exp[j,t]),2) / (sqrt(exp[j,t])+e)
         
         #compared to simulated values
-        chi2.new[j] <- pow((NuIndivs.new.j[j] - exp.j[j]),2) / (sqrt(exp.j[j])+e) 
-      
+        chi2.new[j,t] <- pow((NuIndivs.new[j,t] - exp[j,t]),2) / (sqrt(exp[j,t])+e) 
+        
+     } 
     }
     
     # Add up discrepancy measures for entire data set
-      fit <- sum(chi2[])                     
-      fit.new <- sum(chi2.new[])  
+    for(j in 1:nsite){
+      fit.j <- sum(chi2[j,])                     
+      fit.new.j <- sum(chi2.new[j,]) 
+    }
+    
+      fit <- sum(fit.j)
+      fit.new <- sum(fit.new.j)
       
       test <- step(fit.new-fit) 	
       bpv <- mean(test)
