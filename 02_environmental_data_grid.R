@@ -3,7 +3,7 @@
 equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
 
 #get helper file
-source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R')
+source('generalFunctions.R')
 
 #get focal grids
 focusGrids <- readRDS("data/focusGrids.rds")
@@ -96,7 +96,7 @@ summary(outAccess$Accessibility)
 outAccess <- subset(outAccess,!is.na(Accessibility))
 outAccess <- subset(outAccess,!is.na(grid))
 
-saveRDS(outAccess,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Access.rds")
+saveRDS(outAccess,file="data/grid_Access.rds")
 
 #check the results
 mygrid[] <- 0
@@ -121,7 +121,7 @@ summary(outHP$HumanPop)
 outHP <- subset(outHP,!is.na(HumanPop))
 outHP <- subset(outHP,!is.na(grid))
 
-saveRDS(outHP,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_HumanDensity.rds")
+saveRDS(outHP,file="data/grid_HumanDensity.rds")
 
 #check the results
 mygrid[] <- 0
@@ -248,7 +248,7 @@ myrasterDF<-ddply(myrasterDF,.(grid),summarise,
                   total = unique(total))
 
 
-saveRDS(myrasterDF,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Habitats.rds")
+saveRDS(myrasterDF,"data/grid_Habitats.rds")
 
 ### climate ################################################################################
 
@@ -302,7 +302,7 @@ names(out_Bio1)[2]<-"bio1"
 names(out_Bio5)[2]<-"bio5"
 names(out_Bio6)[2]<-"bio6"
 out_Bio<-cbind(out_Bio1,bio5=out_Bio5[,2],bio6=out_Bio6[,2])
-saveRDS(out_Bio,"C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/grid_Climate.rds")
+saveRDS(out_Bio,"data/grid_Climate.rds")
 
 #combine others
 varDF <- merge(out_Bio,myrasterDF,by="grid",all=T)
@@ -311,7 +311,7 @@ varDF <- merge(varDF,outHP,all=T)
 varDF <- merge(varDF,outAccess,all=T)
 varDF <- subset(varDF,!is.na(grid))
 
-saveRDS(varDF,file="C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/data/varDF_missing_5km_idiv.rds")
+saveRDS(varDF,file="data/varDF_missing_5km_idiv.rds")
 
 ### correlations ############################################################################
 
@@ -369,7 +369,6 @@ plot(Norway,add=T)
 ### alpine data #############################################################################
 
 #also get alpine data
-setwd("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling")
 load("data/alpineData_5kmGrid.RData")
 
 alpineData <- subset(alpineData,site %in% focusGrids)
@@ -501,7 +500,7 @@ saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
 ### group admins ####################################################################
 
-source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R', encoding = 'UTF-8')
+source('generalFunctions.R', encoding = 'UTF-8')
 
 varDF$admGrouped <- mergeCounties(varDF$adm,further=TRUE)
 table(varDF$adm)
