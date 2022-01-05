@@ -55,7 +55,6 @@ allData <- subset(allData, !LinjeID %in%
 # 
 # saveRDS(occ_tmap,"plots/transects.RDS")
 
-
 ### aggregate data to the lines ######################################
 
 #Get statistics per year and line
@@ -127,16 +126,11 @@ groupInfo <- reshape2::acast(tlDF,siteIndex~Year,value.var="nuGroups")
 totalsInfo <- reshape2::acast(tlDF,siteIndex~Year,value.var="totalsInfo")
 groupSizes <- reshape2::acast(tlDF,siteIndex~Year,value.var="groupSize")
 transectLengths <- reshape2::acast(tlDF,siteIndex~Year,value.var="length")
-
-#put NAs where transect length is zero
-groupInfo[transectLengths==0] <- NA
-totalsInfo[transectLengths==0] <- NA
-groupSizes[groupSizes==0] <- NA
 sum(as.numeric(totalsInfo),na.rm=T)
 
 #where there is a NA for transect length - put the mean for the line
 #just for imputation purposes
-meanTL = apply(transectLengths,1,median)
+meanTL = apply(transectLengths,1,function(x)median(x[x!=0]))
 for(i in 1:nrow(transectLengths)){
   for(j in 1:ncol(transectLengths)){
     transectLengths[i,j] <- ifelse(transectLengths[i,j]==0,
@@ -168,30 +162,37 @@ allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$LinjeID,
 allDetections$admN <- siteInfo$admN[match(allDetections$LinjeID,
                                                     siteInfo$LinjeID)]
 
-#add on admN index
+#add on admN index to full data frame as same indices
 siteInfo_ArtsDaten$admNgrouped <- siteInfo$admN[match(siteInfo_ArtsDaten$admGrouped,
                                                       siteInfo$adm)]
   
-#use raw data as predictor in model on sigma
-groupSizes[is.na(groupSizes)] <- median(groupSizes,na.rm=T)
+#predict possible ESW for all transects - impute for mean value when it is missing
+meanGS = apply(groupSizes,1,function(x)median(x[!is.na(x)]))
+for(i in 1:nrow(groupSizes)){
+  for(j in 1:ncol(groupSizes)){
+    groupSizes[i,j] <- ifelse(is.na(groupSizes[i,j]),
+                                   meanGS[i],
+                                   groupSizes[i,j])
+  }
+}
 
 ### line-transect index ########################################
 
 #remember: some lines are given the same siteIndex (when they overlap in the same grid)
 
-#get mapping
+#get mapping from lines to grids
 siteIndex_linetransects <- readRDS(paste(myfolder,"siteIndex_linetransects.rds",sep="/"))
 siteIndex_linetransects <- siteIndex_linetransects %>% ungroup() %>% filter(LinjeID %in% siteInfo$LinjeID)
 siteIndex_linetransects$siteIndex_All <- as.numeric(as.factor(siteIndex_linetransects$siteIndex_All))
 summary(siteIndex_linetransects$siteIndex_All)
 #302 grids are sampled
 
-#map to siteInfo
+#map indices to siteInfo for line transects
 siteInfo$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo$LinjeID,
                                                                       siteIndex_linetransects$LinjeID)]
 summary(siteInfo$siteIndex_All)
 
-#map to siteInfo_ArtsDaten (and adding indices to unsampled grids)
+#map indices to siteInfo_ArtsDaten for grid data
 siteInfo_ArtsDaten$siteIndex_All <- siteIndex_linetransects$siteIndex_All[match(siteInfo_ArtsDaten$grid,siteIndex_linetransects$grid)]
 summary(siteInfo_ArtsDaten$siteIndex_All)
 siteInfo_ArtsDaten <- plyr::arrange(siteInfo_ArtsDaten,siteIndex_All)
@@ -201,6 +202,10 @@ nuMissing <- sum(is.na(siteInfo_ArtsDaten$siteIndex_All))
 maxIndex <- max(siteIndex_linetransects$siteIndex_All)
 siteInfo_ArtsDaten$siteIndex_All[is.na(siteInfo_ArtsDaten$siteIndex_All)] <- (maxIndex+1):(maxIndex + nuMissing)
 summary(siteInfo_ArtsDaten$siteIndex_All)
+
+#arrange
+siteInfo <- siteInfo %>% arrange(siteIndex)
+siteInfo_ArtsDaten <- siteInfo_ArtsDaten %>% arrange(siteIndex_All)
 
 ### make bugs objects ###########################################
 
@@ -213,7 +218,6 @@ bugs.data <- list(#For the state model
   siteAll = siteInfo$siteIndex_All,
   adm = siteInfo$admN,
   pred.adm = siteInfo_ArtsDaten$admNgrouped,
-  year = (1:length(unique(allData$Year))),
   NuIndivs = totalsInfo,
   TransectLength = transectLengths,
   #For the distance model
@@ -229,16 +233,13 @@ bugs.data <- list(#For the state model
 
 names(bugs.data)
 
-bugs.data$GroupSizes[is.na(bugs.data$GroupSizes)] <- 0
-
 ### get environ data #########################################
 
 all(bufferData$LinjeID==siteInfo$LinjeID)
 
 myVars <- c("bio1", "bio5", "bio6","MountainBirchForest", "Bog","ODF",
             "Meadows","OSF","Mire","SnowBeds",
-            "tree_line_position","tree_line",
-            "y","distCoast")
+            "tree_line_position","tree_line","distCoast")
 
 # scale them
 bufferData <- bufferData[,c("LinjeID",myVars)]
@@ -289,7 +290,6 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
   
 bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
-                                  bufferData$y +
                                   bufferData$distCoast +
                                   bufferData$tree_line +
                                   bufferData$MountainBirchForest +
@@ -301,7 +301,6 @@ bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$SnowBeds +
                                   I(bufferData$bio6^2) +
                                   I(bufferData$bio5^2) +
-                                  I(bufferData$y^2) +
                                   I(bufferData$distCoast^2) +
                                   I(bufferData$tree_line^2) +
                                   I(bufferData$MountainBirchForest^2) +
@@ -315,7 +314,6 @@ bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
 # #predictions to full grid
 bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   siteInfo_ArtsDaten$bio5 +
-                                  siteInfo_ArtsDaten$y +
                                   siteInfo_ArtsDaten$distCoast +
                                   siteInfo_ArtsDaten$tree_line +
                                   siteInfo_ArtsDaten$MountainBirchForest +
@@ -327,7 +325,6 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   siteInfo_ArtsDaten$SnowBeds +
                                   I(siteInfo_ArtsDaten$bio6^2) +
                                   I(siteInfo_ArtsDaten$bio5^2) +
-                                  I(siteInfo_ArtsDaten$y^2) +
                                   I(siteInfo_ArtsDaten$distCoast^2) +
                                   I(siteInfo_ArtsDaten$tree_line^2) +
                                   I(siteInfo_ArtsDaten$MountainBirchForest^2) +
@@ -344,9 +341,9 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
 # myvars <- c("y",'bio6',"bio6_2","distCoast","distCoast_2",
 #             "bio5","bio5_2","tree_line","tree_line_2","OSF","SnowBeds")
 # 
-# myvars <- c("bio6","bio5","y","distCoast","tree_line","MountainBirchForest",
+# myvars <- c("bio6","bio5","distCoast","tree_line","MountainBirchForest",
 #             "Bog","ODF","Meadows","OSF","Mire","SnowBeds",
-#             "bio6_2","bio5_2","y_2","distCoast_2","tree_line_2","MountainBirchForest_2",
+#             "bio6_2","bio5_2","distCoast_2","tree_line_2","MountainBirchForest_2",
 #             "Bog_2","ODF_2","Meadows_2","OSF_2","Mire_2","SnowBeds_2")
 
 bugs.data$n.covs <- ncol(bugs.data$occDM)
@@ -360,12 +357,10 @@ bugs.data$n.preds <- dim(bugs.data$predDM)[1]
 library(rjags)
 library(jagsUI)
 
-params <- c("int.d","beta","g",
-            "b.group.size","meanESW","random.d.line",
-            "meanDensity","Density.p",
-            "bpv",
-            "NuIndivs.j","NuIndivs.new.j","exp.j",
-            "mid.expNuIndivs")
+params <- c("int.d","beta","g","r",
+            "b.group.size","meanESW",
+            "meanDensity","Density.p","exp",
+            "bpv","mid.expNuIndivs")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
@@ -407,12 +402,14 @@ mad_dataset <- as.numeric()
 rmse_dataset <- as.numeric()
 n.index <- max(out1_dataset$index)
 
+useData <- !is.na(totalsInfo_mid)
+
 for(i in 1:n.index){
-  mad_dataset[i] <- mean(abs(totalsInfo_mid[!is.na(totalsInfo_mid)] - 
-                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)]))
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[useData] - 
+                               out1_dataset$value[out1_dataset$index==i][useData]))
   
-  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[!is.na(totalsInfo_mid)] - 
-                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)])^2))
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[useData] - 
+                                  out1_dataset$value[out1_dataset$index==i][useData])^2))
   
 }
 
