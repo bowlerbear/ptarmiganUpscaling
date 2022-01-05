@@ -348,7 +348,6 @@ head(Preds)
 
 #look through all iterations
 AUC_psi <- rep(NA, nu_Iteractions)
-TSS_psi <- rep(NA, nu_Iteractions)
 
 for (i in 1:nu_Iteractions){
   
@@ -360,30 +359,22 @@ for (i in 1:nu_Iteractions){
   #get AUC
   perf <- ROCR::performance(pred, "auc")
   AUC_psi[i] <- perf@y.values[[1]]
-  
-  #get TSS
-  tp_perf <- ROCR::performance(pred, "tpr")
-  tn_perf <- ROCR::performance(pred, "tnr")
-  TSS_psi[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
-  
-  
+
 }
 
 summary(AUC_psi)
 saveRDS(summary(AUC_psi),file=paste0("AUC_psi_occModel_upscaling_",task.id,".rds"))
-saveRDS(summary(TSS_psi),file=paste0("TSS_psi_occModel_upscaling_",task.id,".rds"))
 
 
 #Y against Py - pull out one year
 Py_preds <- subset(ggd2,grepl("Py",ggd2$Parameter))
-Py_preds <- subset(Py_preds,!grepl("Py.pred",ggd2$Parameter))
+Py_preds <- subset(Py_preds,!grepl("Py.pred",Py_preds$Parameter))
 Py_preds$Iteration <- as.numeric(interaction(Py_preds$Iteration,Py_preds$Chain))
 nu_Iteractions <- max(Py_preds$Iteration)
 head(Py_preds)
 
 #look through all iterations
 AUC_py <- rep(NA, nu_Iteractions)
-TSS_py <- rep(NA, nu_Iteractions)
               
 for (i in 1:nu_Iteractions){
   
@@ -398,16 +389,10 @@ for (i in 1:nu_Iteractions){
   perf <- ROCR::performance(pred, "auc")
   AUC_py[i] <- perf@y.values[[1]]
   
-  #get TSS
-  tp_perf <- ROCR::performance(pred, "tpr")
-  tn_perf <- ROCR::performance(pred, "tnr")
-  TSS_py[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
-  
 }
 
 summary(AUC_py)
 saveRDS(summary(AUC_py),file=paste0("AUC_py_occModel_upscaling_",task.id,".rds"))
-saveRDS(summary(TSS_py),file=paste0("TSS_py_occModel_upscaling_",task.id,".rds"))
 
 
 #Y against Py_pred (psi x p) - pull out one year
@@ -418,7 +403,6 @@ head(Py_preds)
 
 #look through all iterations
 AUC_py <- rep(NA, nu_Iteractions)
-TSS_py <- rep(NA, nu_Iteractions)
 
 for (i in 1:nu_Iteractions){
   
@@ -433,18 +417,14 @@ for (i in 1:nu_Iteractions){
   perf <- ROCR::performance(pred, "auc")
   AUC_py[i] <- perf@y.values[[1]]
   
-  #get TSS
-  tp_perf <- ROCR::performance(pred, "tpr")
-  tn_perf <- ROCR::performance(pred, "tnr")
-  TSS_py[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
-  
 }
 
+summary(AUC_py)
+
 saveRDS(summary(AUC_py),file=paste0("AUC_pypred_occModel_upscaling_",task.id,".rds"))
-saveRDS(summary(TSS_py),file=paste0("TSS_pypred_occModel_upscaling_",task.id,".rds"))
 
 ### get full z and psi ##########################################################
 
-out2 <- update(out1, parameters.to.save = c("z"),n.iter=3000)
+out2 <- update(out1, parameters.to.save = c("z"),n.iter=2000)
 ggd <- ggs(out2$samples)
 saveRDS(ggd,file=paste0("Z_occModel_upscaling_",task.id,".rds"))
