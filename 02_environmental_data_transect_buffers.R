@@ -7,7 +7,7 @@ library(maptools)
 myfolder <- "Data"
 equalM<-"+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0"
 
-source('C:/Users/db40fysa/Dropbox/ptarmigan Upscaling/generalFunctions.R')
+source('generalFunctions.R')
 
 ### get norway ##############################################
 
@@ -114,7 +114,7 @@ for(i in 1:length(myLines)){
   
   line <- myLines[i]
 
-  png(filename=paste0("obs/circles/LinjeID",line,".png"))
+  png(filename=paste0("plots/obs/circles/LinjeID",line,".png"))
   plot(subset(Polys_spatial,LinjeID==line))
   plot(subset(Lines_spatial,LinjeID==line),add=T)
   dev.off()
@@ -140,29 +140,32 @@ centreDF@data$y <- centreDF@coords[,2]
 saveRDS(centreDF@data,"data/lines_to_grids.rds")
 
 # #### all grids for each line #################################
-# 
-# #why do some lines not overlap with the focal grids??
-# plot(NorwayOrig)
-# plot(Lines_spatial,add=T,col="red")
-# 
-# #for those missing (see 'mapping_lines_to_grids.R')
-# plot(NorwayOrig)
-# plot(subset(Lines_spatial,LinjeID %in% missing),add=T,col="red")
-# #these are in the north - in islands and in Sweden (not in focal grids)
-# 
-# #put buffer around each line
-# Lines_spatial <- spTransform(Lines_spatial,crs(equalM))
-# #Lines_spatial_buffer <- gBuffer(Lines_spatial,width = 5000, byid=TRUE)
-# Lines_spatial_buffer <- gBuffer(Lines_spatial,width = 15000, byid=TRUE)
-# Polys_grids <- extract(mygrid,Lines_spatial_buffer,df=T)
-# head(Polys_grids)
-# 
-# #add to data frame
-# Lines_spatial_buffer$ID <- 1:nrow(Lines_spatial_buffer)
-# Polys_grids$LinjeID <- Lines_spatial_buffer$LinjeID[match(Polys_grids$ID,Lines_spatial_buffer$ID)]
-# names(Polys_grids)[2]<- "grid"
-# #saveRDS(Polys_grids,file = "data/lineBuffers_to_grids_5km.rds")
-# saveRDS(Polys_grids,file = "data/lineBuffers_to_grids_15km.rds")
+ 
+#why do some lines not overlap with the focal grids??
+plot(NorwayOrig)
+plot(Lines_spatial,add=T,col="red")
+
+#for those missing (see 'mapping_lines_to_grids.R')
+plot(NorwayOrig)
+plot(subset(Lines_spatial,LinjeID %in% missing),add=T,col="red")
+#these are in the north - in islands and in Sweden (not in focal grids)
+
+#put buffer around each line
+Lines_spatial <- spTransform(Lines_spatial,crs(equalM))
+
+#Lines_spatial_buffer <- gBuffer(Lines_spatial,width = 5000, byid=TRUE)
+Lines_spatial_buffer <- gBuffer(Lines_spatial,width = 15000, byid=TRUE)
+
+Polys_grids <- extract(mygrid,Lines_spatial_buffer,df=T)
+head(Polys_grids)
+
+#add to data frame
+Lines_spatial_buffer$ID <- 1:nrow(Lines_spatial_buffer)
+Polys_grids$LinjeID <- Lines_spatial_buffer$LinjeID[match(Polys_grids$ID,Lines_spatial_buffer$ID)]
+names(Polys_grids)[2]<- "grid"
+
+#saveRDS(Polys_grids,file = "data/lineBuffers_to_grids_5km.rds")
+saveRDS(Polys_grids,file = "data/lineBuffers_to_grids_15km.rds")
 
 ### get environ data for all circles ########################
 
@@ -354,8 +357,6 @@ names(lineCentres_xy)[3] <- "distCoast"
 varDF <- merge(varDF,lineCentres_xy,by="LinjeID",all.x=T)
 
 ### alpine data #############################################################################
-
-setwd("C:/Users/db40fysa/Dropbox/ptarmigan Upscaling")
 
 #also get alpine data
 
