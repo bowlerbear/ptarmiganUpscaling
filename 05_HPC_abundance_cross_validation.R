@@ -106,23 +106,6 @@ totalsInfo <- reshape2::acast(tlDF_train,siteIndex~Year,value.var="totalsInfo")
 groupSizes <- reshape2::acast(tlDF_train,siteIndex~Year,value.var="groupSize")
 transectLengths <- reshape2::acast(tlDF_train,siteIndex~Year,value.var="length")
 
-#put NAs where transect length is zero
-groupInfo[transectLengths==0] <- NA
-totalsInfo[transectLengths==0] <- NA
-groupSizes[groupSizes==0] <- NA
-sum(as.numeric(totalsInfo),na.rm=T)
-
-#where there is a NA for transect length - put the mean for the line
-#just for imputation purposes
-meanTL = apply(transectLengths,1,median)
-for(i in 1:nrow(transectLengths)){
-  for(j in 1:ncol(transectLengths)){
-    transectLengths[i,j] <- ifelse(transectLengths[i,j]==0,
-                                   meanTL[i],
-                                   transectLengths[i,j])
-  }
-}
-
 #check alignment with other datasets
 all(row.names(groupInfo)==siteInfo_train$siteIndex)
 
@@ -134,14 +117,30 @@ allDetections$yearIndex <- as.numeric(factor(allDetections$Year))
 allDetections$siteIndex <- siteInfo$siteIndex[match(allDetections$LinjeID,
                                                     siteInfo$LinjeID)]
 
-#use raw data as predictor in model on sigma
-groupSizes[is.na(groupSizes)] <- median(groupSizes,na.rm=T)
-
 #same for testing dataset
 groupSizes_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="groupSize")
-groupSizes_test[is.na(groupSizes_test)] <- median(groupSizes_test,na.rm=T)
 transectLengths_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="length")
 totalsInfo_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="totalsInfo")
+
+### group sizes
+#predict possible ESW for all transects - impute for mean value when it is missing
+meanGS = apply(groupSizes,1,function(x)median(x[!is.na(x)]))
+for(i in 1:nrow(groupSizes)){
+  for(j in 1:ncol(groupSizes)){
+    groupSizes[i,j] <- ifelse(is.na(groupSizes[i,j]),
+                              meanGS[i],
+                              groupSizes[i,j])
+  }
+}
+
+meanGS_test = apply(groupSizes_test,1,function(x)median(x[!is.na(x)]))
+for(i in 1:nrow(groupSizes_test)){
+  for(j in 1:ncol(groupSizes_test)){
+    groupSizes_test[i,j] <- ifelse(is.na(groupSizes_test[i,j]),
+                              meanGS_test[i],
+                              groupSizes_test[i,j])
+  }
+}
 
 ### make bugs objects ###########################################
 
@@ -152,7 +151,6 @@ bugs.data <- list(#For the state model
   nadm = length(unique(siteInfo$admN)),
   site = siteInfo$siteIndex,
   adm = siteInfo$admN,
-  year = (1:length(unique(allData$Year))),
   NuIndivs = totalsInfo,
   TransectLength_train = transectLengths,
   TransectLength_test = transectLengths_test,
@@ -160,7 +158,7 @@ bugs.data <- list(#For the state model
   W = 200,
   ndetections_train = nrow(allDetections),
   y = allDetections$LinjeAvstand,
-  ln_GroupSize = log(allDetections$totalIndiv),
+  ln_GroupSize = log(allDetections$totalIndiv+1),
   groupSizes_train = groupSizes,
   groupSizes_test = groupSizes_test,
   zeros.dist = rep(0,nrow(allDetections)))
@@ -186,30 +184,16 @@ all(siteInfo_test$LinjeID==bufferData_test$LinjeID)
 if(mymodel == "linetransectModel_variables_CV.txt"){
   
 #add new variables to the bugs data
-bugs.data$occDM_train <- model.matrix(~ bufferData_train$y +
-                                    bufferData_train$bio6 +
-                                    I(bufferData_train$bio6^2) +
-                                    bufferData_train$distCoast +
-                                    I(bufferData_train$distCoast^2) +
+bugs.data$occDM_train <- model.matrix(~ bufferData_train$bio6 +
                                     bufferData_train$bio5 +
-                                    I(bufferData_train$bio5^2) +
                                     bufferData_train$tree_line +
-                                    I(bufferData_train$tree_line^2) +
-                                    bufferData_train$OSF +
-                                    bufferData_train$SnowBeds)[,-1]
+                                    I(bufferData_train$tree_line^2))[,-1]
   
 #predictions to full grid
-bugs.data$occDM_test <- model.matrix(~ bufferData_test$y +
-                                     bufferData_test$bio6 +
-                                     I(bufferData_test$bio6^2) +
-                                     bufferData_test$distCoast +
-                                     I(bufferData_test$distCoast^2) +
+bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
                                      bufferData_test$bio5 +
-                                     I(bufferData_test$bio5^2) +
                                      bufferData_test$tree_line +
-                                     I(bufferData_test$tree_line^2) +
-                                     bufferData_test$OSF +
-                                     bufferData_test$SnowBeds)[,-1]
+                                     I(bufferData_test$tree_line^2))[,-1]
   
 ### indicator model selection ################################
 #or lasso
@@ -219,7 +203,6 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$y +
   
   bugs.data$occDM_train <- model.matrix(~ bufferData_train$bio6 +
                                     bufferData_train$bio5 +
-                                    bufferData_train$y +
                                     bufferData_train$distCoast +
                                     bufferData_train$tree_line +
                                     bufferData_train$MountainBirchForest +
@@ -231,7 +214,6 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$y +
                                     bufferData_train$SnowBeds +
                                     I(bufferData_train$bio6^2) +
                                     I(bufferData_train$bio5^2) +
-                                    I(bufferData_train$y^2) +
                                     I(bufferData_train$distCoast^2) +
                                     I(bufferData_train$tree_line^2) +
                                     I(bufferData_train$MountainBirchForest^2) +
@@ -245,7 +227,6 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$y +
   # #predictions to full grid
   bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
                                      bufferData_test$bio5 +
-                                     bufferData_test$y +
                                      bufferData_test$distCoast +
                                      bufferData_test$tree_line +
                                      bufferData_test$MountainBirchForest +
@@ -257,7 +238,6 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$y +
                                      bufferData_test$SnowBeds +
                                      I(bufferData_test$bio6^2) +
                                      I(bufferData_test$bio5^2) +
-                                     I(bufferData_test$y^2) +
                                      I(bufferData_test$distCoast^2) +
                                      I(bufferData_test$tree_line^2) +
                                      I(bufferData_test$MountainBirchForest^2) +
@@ -313,7 +293,7 @@ out1_dataset <- subset(ggd,grepl("mid.expNuIndivs_train",ggd$Parameter))
 out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
 
 #get actual NuIndiv
-totalsInfo_mid <- totalsInfo[,6]
+totalsInfo_mid <- as.numeric(totalsInfo[,6])
 
 #get difference between this value and the simulated values
 mad_dataset <- as.numeric()
@@ -340,7 +320,7 @@ out1_dataset <- subset(ggd,grepl("mid.expNuIndivs_test",ggd$Parameter))
 out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
 
 #get actual NuIndiv
-totalsInfo_mid <- totalsInfo_test[,6]
+totalsInfo_mid <- as.numeric(totalsInfo_test[,6])
 
 #get difference between this value and the simulated values
 mad_dataset <- as.numeric()
