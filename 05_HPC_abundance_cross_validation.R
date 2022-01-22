@@ -83,6 +83,7 @@ task.id = as.integer(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
 
 #get model for this task
 mymodel <- modelTaskID$Model[which(modelTaskID$TaskID==task.id)]
+mymodel
 
 ### folds ########################################################
 
@@ -122,7 +123,8 @@ groupSizes_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="groupSize
 transectLengths_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="length")
 totalsInfo_test <- reshape2::acast(tlDF_test,siteIndex~Year,value.var="totalsInfo")
 
-### group sizes
+### group sizes ###################################################
+
 #predict possible ESW for all transects - impute for mean value when it is missing
 meanGS = apply(groupSizes,1,function(x)median(x[!is.na(x)]))
 for(i in 1:nrow(groupSizes)){
@@ -256,37 +258,54 @@ bugs.data$n.covs <- ncol(bugs.data$occDM_train)
 library(rjags)
 library(jagsUI)
 
-params <- c("int.d","line.d.sd","year.d.sd","beta")
+params <- c("int.d","line.d.sd","year.d.sd","beta",
+            "mid.expNuIndivs_train","mid.expNuIndivs_test")
 
 modelfile <- paste(myfolder,mymodel,sep="/")
 
-n.iterations <- 10000
+n.iterations <- 50000
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1")) 
+
+Sys.time()
 
 out1 <- jags(bugs.data, 
              inits=NULL, 
              params, 
              modelfile, 
-             n.thin=10,
+             n.thin=50,
              n.chains=n.cores, 
              n.burnin=n.iterations/2,
              n.iter=n.iterations,
              parallel=T)
 
-#saveRDS(out1$summary,file="outSummary_linetransectModel_CV.rds")
+saveRDS(out1$summary,file="outSummary_linetransectModel_CV.rds")
 
-#update to extract cross validation comparisons
-out2 <- update(out1,
-               parameters.to.save = c("mid.expNuIndivs_train","mid.expNuIndivs_test"),
-               n.iter = 1000)
+Sys.time()
+print("Done main model")
 
-#saveRDS(out2,file=paste0("out_update_",mymodel,"_",fold.id,".rds"))
+### summary ###################################
 
+temp <- data.frame(out1$summary)
+temp$Param <- row.names(temp)
 
-### fit #######################################################
+#train
+temp_train <- subset(temp, grepl("mid.expNuIndivs_train", temp$Param))$mean
+data_train <- bugs.data$NuIndivs[,6]
+mean(abs(data_train[!is.na(data_train)] - temp_train[!is.na(data_train)]))
+cor.test(data_train[!is.na(data_train)],temp_train[!is.na(data_train)])
+
+#test
+temp_test <- subset(temp, grepl("mid.expNuIndivs_test", temp$Param))$mean
+data_test <- totalsInfo_test[,6]
+mean(abs(data_test[!is.na(data_test)] - temp_test[!is.na(data_test)]))
+cor.test(data_test[!is.na(data_test)],temp_test[!is.na(data_test)])
+
+print("Simple stats done now")
+
+### samples ###################################
 
 library(ggmcmc)
-ggd <- ggs(out2$samples)
+ggd <- ggs(out1$samples)
 
 #train
 out1_dataset <- subset(ggd,grepl("mid.expNuIndivs_train",ggd$Parameter))
@@ -294,6 +313,7 @@ out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset
 
 #get actual NuIndiv
 totalsInfo_mid <- as.numeric(totalsInfo[,6])
+useData <- !is.na(totalsInfo_mid)
 
 #get difference between this value and the simulated values
 mad_dataset <- as.numeric()
@@ -301,11 +321,12 @@ rmse_dataset <- as.numeric()
 n.index <- max(out1_dataset$index)
 
 for(i in 1:n.index){
-  mad_dataset[i] <- mean(abs(totalsInfo_mid[!is.na(totalsInfo_mid)] - 
-                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)]))
   
-  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[!is.na(totalsInfo_mid)] - 
-                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)])^2))
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[useData] - 
+                               out1_dataset$value[out1_dataset$index==i][useData]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[useData] - 
+                                  out1_dataset$value[out1_dataset$index==i][useData])^2))
   
 }
 
@@ -321,6 +342,7 @@ out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset
 
 #get actual NuIndiv
 totalsInfo_mid <- as.numeric(totalsInfo_test[,6])
+useData <- !is.na(totalsInfo_mid)
 
 #get difference between this value and the simulated values
 mad_dataset <- as.numeric()
@@ -328,11 +350,11 @@ rmse_dataset <- as.numeric()
 n.index <- max(out1_dataset$index)
 
 for(i in 1:n.index){
-  mad_dataset[i] <- mean(abs(totalsInfo_mid[!is.na(totalsInfo_mid)] - 
-                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)]))
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[useData] - 
+                               out1_dataset$value[out1_dataset$index==i][useData]))
   
-  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[!is.na(totalsInfo_mid)] - 
-                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mid)])^2))
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[useData] - 
+                                  out1_dataset$value[out1_dataset$index==i][useData])^2))
   
 }
 
@@ -341,6 +363,8 @@ summary(rmse_dataset)
 
 saveRDS(summary(mad_dataset),file=paste0("MAD_test_linetransectModel_CV_",task.id,".rds"))
 saveRDS(summary(rmse_dataset),file=paste0("RMSE_test_linetransectModel_CV_",task.id,".rds"))
+
+print("End")
 
 ### end ########################################################################
 
