@@ -39,27 +39,14 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 ### OCCU models ##############################################
 
-### plot map #################################################
-
-#or slurm models
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_1.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_2.rds")
 out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_3.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_4.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_5.rds")
+out1 <- readRDS("model-outputs/SLURM/occModel/outSummary_occModel_upscaling_6.rds")
 
-#with detection covariates
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/outSummary_occModel_upscaling_1.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/outSummary_occModel_upscaling_2.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/outSummary_occModel_upscaling_3.rds")
-
-
-#null models
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/outSummary_occModel_upscaling_1.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/outSummary_occModel_upscaling_2.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/outSummary_occModel_upscaling_3.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/outSummary_occModel_upscaling_4.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/outSummary_occModel_upscaling_5.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/outSummary_occModel_upscaling_6.rds")
-
+### plot map #################################################
 
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
@@ -204,123 +191,14 @@ subset(betas,mean>0.25)
 
 ### BPV #####################################################
 
-#or slurm models
-out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_1.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_2.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/out_update_occModel_upscaling_3.rds")
-
-#with detection covariates
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/out_update_occModel_upscaling_1.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/out_update_occModel_upscaling_2.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/detection_covariates2/out_update_occModel_upscaling_3.rds")
-
-#with null models
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/out_update_occModel_upscaling_1.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/out_update_occModel_upscaling_2.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/out_update_occModel_upscaling_3.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/out_update_occModel_upscaling_4.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/out_update_occModel_upscaling_5.rds")
-out1 <- readRDS("model-outputs/SLURM/occModel/null_models/out_update_occModel_upscaling_6.rds")
-
-
-#fit vs fit new
-hist(out1$sims.list$fit.new)
-summary(out1$sims.list$fit.new)
-median(out1$sims$fit)
-abline(v=median(out1$sims.list$fit),col="red")
-mean(out1$sims.list$fit.new > out1$sims.list$fit)
-#good!!
-
-#with new models in which BPV is calculated within the model
 subset(out1,grepl("bpv",out1$Param))
 
-### AUC ######################################################
+### AUC ##############################################
 
-#now included direct in the HPC code
-
-library(ggmcmc)
-ggd2 <- ggs(out1$samples)
-
-#Z against psi
-Preds <- subset(ggd2,grepl("mid.psi",ggd2$Parameter))
-Z_Preds <- subset(ggd2,grepl("mid.z",ggd2$Parameter))
-Preds$Iteration <- as.numeric(factor(paste(Preds$Iteration,Preds$Chain)))
-nu_Iteractions <- max(Preds$Iteration)
-head(Preds)
-
-#look through all iterations
-AUC_psi <- rep(NA, nu_Iteractions)
-TSS_psi <- rep(NA, nu_Iteractions)
-
-for (i in 1:nu_Iteractions){
-
-  psi.vals <- Preds$value[Preds$Iteration==i]
-  z.vals <- Z_Preds$value[Preds$Iteration==i]
-
-  pred <- ROCR::prediction(psi.vals, z.vals)
-
-  #get AUC
-  perf <- ROCR::performance(pred, "auc")
-  AUC_psi[i] <- perf@y.values[[1]]
-  
-  #get TSS
-  tp_perf <- ROCR::performance(pred, "tpr")
-  tn_perf <- ROCR::performance(pred, "tnr")
-  TSS_psi[i] <- tp_perf@y.values[[1]] + tn_perf@y.values[[1]] - 1
-  
-}
-
-summary(AUC_psi)
-#Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
-#0.8677  0.8767  0.8800  0.8799  0.8828  0.8938
-
-#Y against Py
-Py_preds <- subset(ggd2,grepl("Py",ggd2$Parameter))
-Py_preds$Iteration <- as.numeric(paste(factor(Py_preds$Iteration,Py_preds$Chain)))
-nu_Iteractions <- max(Py_preds$Iteration)
-head(Py_preds)
-
-#look through all iterations
-AUC_py <- rep(NA, nu_Iteractions)
-
-for (i in 1:nu_Iteractions){
-
-  py.vals <- Py_preds$value[Py_preds$Iteration==i]
-
-  #remove the NAs
-  missing <- is.na(bugs.data$y)
-
-  pred <- ROCR::prediction(py.vals[!missing],bugs.data$y[!missing])
-
-  #get AUC
-  perf <- ROCR::performance(pred, "auc")
-  AUC_py[i] <- perf@y.values[[1]]
-
-}
-
-summary(AUC_py)
-
-
-### model AUC ##############################################
-
-#in new models, AUC is output as part of model running on HPC
-
-#full model - 3
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_psi_occModel_upscaling_3.rds")
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_py_occModel_upscaling_3.rds")
-
-#null model - 4
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_psi_occModel_upscaling_4.rds")
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_py_occModel_upscaling_4.rds")
-
-#null detection - 5
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_psi_occModel_upscaling_5.rds")
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_py_occModel_upscaling_5.rds")
-
-
-#null state - 6
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_psi_occModel_upscaling_6.rds")
-readRDS("model-outputs/SLURM/occModel/null_models/AUC_py_occModel_upscaling_6.rds")
+list.files("model-outputs/SLURM/occModel", full.names=TRUE) %>%
+  str_subset("AUC_") %>%
+  set_names() %>%
+  map_dfr(readRDS, .id = "File")
 
 ### cross validation #######################################
 
@@ -386,55 +264,22 @@ bufferData <- readRDS("data/varDF_allEnvironData_buffers_idiv.rds")
 bufferData <- subset(bufferData, ! LinjeID %in%
                        c(935,874,876,882,884,936,2317,2328,2338,878,886,1250,1569,2331,2339,1925))
 
-#slurm model
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_1.rds")
 
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_2.rds")
 
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_4.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_5.rds")
+
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_6.rds")
+
 #make into a df
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
-
-### compare models #######################################
-
-#get preds from section below
-
-# #compare with limited line transect model
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_line_transects_random/outSummary_linetransectModel_variables_1.rds")
-# 
-# out1 <- data.frame(out1)
-# out1$Param <- row.names(out1)
-# preds_limited <- subset(out1,grepl("meanDensity",out1$Param))
-# 
-# plot(preds$mean,preds_limited$mean)
-# abline(0,1)
-# 
-# #compare with limited gridyear model
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_gridyear_random/outSummary_linetransectModel_variables_1.rds")
-# 
-# out1 <- data.frame(out1)
-# out1$Param <- row.names(out1)
-# preds_limited <- subset(out1,grepl("meanDensity",out1$Param))
-# 
-# plot(preds$mean,preds_limited$mean)
-# abline(0,1)
-
-#compare different response formulations
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_grid_transects_random/outSummary_linetransectModel_variables_1.rds")
-# out1 <- data.frame(out1)
-# out1$Param <- row.names(out1)
-# preds_grid <- subset(out1,grepl("meanDensity",out1$Param))
-# 
-# #with direct response (and surveyArea as effort term)
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/limited_grid_transects_random/direct_response/outSummary_linetransectModel_variables_1.rds")
-# out1 <- data.frame(out1)
-# out1$Param <- row.names(out1)
-# preds_grid_response <- subset(out1,grepl("meanDensity",out1$Param))
-# plot(preds_grid$mean,preds_grid_response$mean)
-# abline(0,1)
-#same!!!!
+table(out1$Rhat<1.1)
 
 ### plot map ##############################################
 
@@ -444,25 +289,9 @@ bufferData$preds <- preds$mean
 bufferData$predsSD <- preds$sd
 summary(bufferData$preds)
 
-#model 1
-#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#5.118  10.755  12.963  12.955  15.566  24.552
-#model 2
-#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#2.882  10.927  12.688  12.920  14.880  24.797
-#model 3
-#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#2.112   8.620  11.773  12.782  15.871  30.875
-
-#including line and grid random effect
-
-#model1
-##Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#2.032   8.535  11.549  12.803  15.975  34.741
-
 #final - model 3
-#Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#2.007   9.222  12.304  13.502  16.726  32.257
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#2.186   8.755  11.731  12.836  16.028  32.253
 
 #tmap
 
@@ -502,14 +331,17 @@ subset(out1,grepl("b.group.size",out1$Param))
 #mean density per km
 summary(subset(out1,grepl("meanDensity",out1$Param))[,"mean"])
 
+#overdispersion?
+summary(subset(out1,grepl("r",out1$Param))[,"mean"])
+
 ### correlations #################
 
 #mean across all years
 preds <- subset(out1,grepl("exp.j",out1$Param))
-dataMeans <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
-preds$data <- as.numeric(dataMeans)
+preds$data <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
 summary(preds$data)
 summary(preds$mean)
+summary(abs(preds$data-preds$mean))
 
 #main plot
 qplot(data,mean,data=preds)+
@@ -517,7 +349,6 @@ qplot(data,mean,data=preds)+
   theme_bw()+
   xlab("Observed data")+ylab("Model prediction")
 
-#correlated but noisey
 #on log-scale
 qplot(data,mean,data=preds)+
   geom_abline(intercept=0,slope=1)+
@@ -525,191 +356,24 @@ qplot(data,mean,data=preds)+
   theme_bw()+
   xlab("Observed data")+ylab("Model prediction")
 
-
 cor.test(preds$data,preds$mean)#0.87
 cor.test(log(preds$data),log(preds$mean))
 #model 3 - 0.85
 
 ### BPV ###################################################
 
-# #compare data versus preds
-# exp <- subset(out1,grepl("exp.j",out1$Param))
-# obs <- subset(out1,grepl("NuIndivs.j",out1$Param))
-# expNu <- subset(out1,grepl("NuIndivs.new.j",out1$Param))
-# 
-# par(mfrow=c(2,2))
-# hist(dataMeans)
-# hist(obs$mean)
-# hist(exp$mean)
-# hist(expNu$mean)
-# #look very similar!!!
-# 
-# summary(dataMeans)#highest values
-# summary(obs$mean)
-# summary(exp$mean)
-# summary(expNu$mean)
-# 
-# #fit and fit new
-# subset(out1,grepl("fit",out1$Param))
-# #fit new is bigger
-# 
-# #full models
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_3.rds")
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_1.rds")
-# 
-# 
-# #BPV
-# mean(out1$sims.list$fit.new > out1$sims.list$fit)
-# 
-# par(mfrow=c(2,1))
-# hist(out1$sims.list$fit)
-# hist(out1$sims.list$fit.new)#larger
-# summary(out1$sims.list$fit.new)
-# summary(out1$sims.list$fit)
-# median(out1$sims$fit)
-# abline(v=median(out1$sims.list$fit),col="red")
-
-#limited line transect model
-#model 3 - 0.53
-
-#limited grid transect model
-#model 1 - 0.17
-
-#with limited gridyear
-#model 1 - -0.27
-
-#with adm grid year
-#model 1 - 0.213
-
-#with line and grid random effect
-#model 1 - 0.72
-#model 3 - 0.73
-
-
-#bpv calculated in the model
-#subset(out1,grepl("bpv",out1$Param))
-#                 mean        sd X2.5. X25. X50. X75. X97.5.     Rhat n.eff overlap0 f Param
-#bpv          0.8291667 0.3765202     0    1    1    1      1 1.001043  1200        1 1   bpv
-
-### Dharma ###############################################
-
-#for each site mean
-
-# library(DHARMa)
-# #get simulated data
-# simulations = out1$sims.list$NuIndivs.new.j
-# #change into a 2-D matrix
-# #https://stackoverflow.com/questions/37662433/r-3d-array-to-2d-matrix
-# #dim(simulations)
-# #dim(simulations) <- c(dim(simulations)[1],599 * 11)
-# 
-# #get model predictions
-# preds = out1$mean$exp.j
-# #dim(preds)
-# #dim(preds) <- c(dim(simulations)[1],599*11)
-# #preds = apply(preds, 2, median)
-# #length(preds)
-# 
-# #get mean of observed data
-# obs <- out1$mean$NuIndivs.j
-# #obs <- apply(bugs.data$NuIndivs,1,mean,na.rm=T)
-# #dim(obs)
-# #dim(obs) <- c(599*11)
-# #length(obs)
-# 
-# #now need to remove missing values
-# #notMiss <- !is.na(obs)
-# #length(notMiss)
-# 
-# #sim = createDHARMa(simulatedResponse = t(simulations[,notMiss]),
-# #                   observedResponse = obs[notMiss],
-# #                   fittedPredictedResponse = preds[notMiss],
-# #                   integerResponse = T)
-# 
-# sim = createDHARMa(simulatedResponse = t(simulations),
-#                    observedResponse = obs,
-#                    fittedPredictedResponse = preds,
-#                    integerResponse = T)
-# 
-# plot(sim)
-# 
-# #DHARMA tests
-# testZeroInflation(sim)
-# testDispersion(sim)
-
-### check model calc #####################################
-
-# #mean of the data, calculated by the model
-# out1$mean$NuIndivs.j
-# 
-# #identify sites with complete data
-# nuYears <- apply(bugs.data$NuIndivs,1,function(x)sum(!is.na(x)))
-# bugs.data$NuIndivs[1:10,]
-# #how many sampled in each year
-# table(nuYears)
-# 
-# #45 was sampled in all years
-# bugs.data$NuIndivs[45,]
-# mean(bugs.data$NuIndivs[45,])
-# out1$mean$NuIndivs.j[45]#works!
-# 
-# #test another
-# #543
-# bugs.data$NuIndivs[543,]
-# mean(bugs.data$NuIndivs[543,])
-# out1$mean$NuIndivs.j[543]#works!
-# 
-# #few were visited in 2007 and 2008
+subset(out1,grepl("bpv",out1$Param))
 
 ### MAD ###################################################
 
-#quick check
-# out1 <- readRDS("model-outputs/SLURM/distanceModel/admyear_random/outSummary_linetransectModel_variables_4.rds")
-# 
-# qplot(out1$mean[grepl("mean.expNuIndivs",row.names(out1))],
-#       out1$mean[grepl("exp.j",row.names(out1))])
-# #the same!!!
-
-#null model
-out1 <- readRDS("model-outputs/SLURM/distanceModel/out_linetransectModel_variables_4.rds")
-
-#extract dataset data
-ggd <- ggs(out1$samples)
-out1_dataset <- subset(ggd,grepl("expNuIndivs",ggd$Parameter))
-out1_dataset <- subset(out1_dataset,!grepl("mean.expNuIndivs",out1_dataset$Parameter))
-out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
-subset(out1_dataset,Iteration==1 & Chain==1)
-
-#get actual NuIndiv
-totalsInfo_long <- as.numeric(gdata::unmatrix(totalsInfo,byrow=T))
-
-#get difference between this value and the simulated values
-mad_dataset <- as.numeric()
-rmse_dataset <- as.numeric()
-n.index <- max(out1_dataset$index)
-
-for(i in 1:n.index){
-  mad_dataset[i] <- mean(abs(totalsInfo_long[!is.na(totalsInfo_long)] - 
-                               out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_long)]))
-  
-  rmse_dataset[i] <- sqrt(mean((totalsInfo_long[!is.na(totalsInfo_long)] - 
-                                  out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_long)])^2))
-  
-}
-
-summary(mad_dataset)
-summary(rmse_dataset)
-
-#calculation within code
-
 #MAD
-madFiles <- list.files("model-outputs/SLURM/distanceModel", full.names=TRUE) %>%
+list.files("model-outputs/SLURM/distanceModel", full.names=TRUE) %>%
   str_subset("MAD")  %>%
   map(~ readRDS(.x)) %>%
   reduce(rbind)
 
 #RMSE
-rmseFiles <- list.files("model-outputs/SLURM/distanceModel", full.names=TRUE) %>%
+list.files("model-outputs/SLURM/distanceModel", full.names=TRUE) %>%
   str_subset("RMSE") %>%
   map(~ readRDS(.x)) %>%
   reduce(rbind)
@@ -786,134 +450,12 @@ ggplot(gs)+
 #bio5
 #bio6
 
-### cross validation 1 #####################################
 
-#CV fold models
-allFiles <- list.files("model-outputs/SLURM/distanceModel/CV")
+#tree line position not important for density
 
-#write a function to test CV for each fold and dataset (train or test)
-testAbundanceCV <- function(dataset = "train",
-                            mymodel = "linetransectModel_variables_CV.txt",
-                            fold = 1){
-
-#get files for model and fold  
-myFiles <- allFiles[grepl(mymodel,allFiles)]
-myFolds <- myFiles[grepl(fold,myFiles)]
-
-#read in main model
-out1 <- readRDS(paste("model-outputs/SLURM/distanceModel/CV",myFolds[1],sep="/"))
-ggd <- ggs(out1$samples)
-
-#extract dataset data
-out1_dataset <- subset(ggd,grepl(paste0("mean.expNuIndivs_",dataset),ggd$Parameter))
-out1_dataset$siteIndex <- sub(".*\\[([^][]+)].*", "\\1", as.character(out1_dataset$Parameter))
-out1_dataset$siteIndex <- as.numeric(as.character(out1_dataset$siteIndex))
-out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
-
-#get actual NuIndiv
-dataset_fold <- myFolds[grepl(dataset,myFolds)]
-totalsInfo <- readRDS(paste("model-outputs/SLURM/distanceModel/CV",dataset_fold,sep="/"))
-totalsInfo_mean <- rowMeans(totalsInfo,na.rm=T)
-
-#check they are consistent:
-length(unique(out1_dataset$siteIndex)) == dim(totalsInfo)[1]
-
-#plot correlation between mean values
-meanVals <- plyr::ddply(out1_dataset,"siteIndex",summarise,pred=mean(value))
-meanVals$obs <- totalsInfo_mean
-
-#get difference between this value and the simulated values
-mad_dataset <- as.numeric()
-rmse_dataset <- as.numeric()
-n.index <- max(out1_dataset$index)
-
-for(i in 1:n.index){
-  mad_dataset[i] <- mean(abs(totalsInfo_mean[!is.na(totalsInfo_mean)] - 
-                       out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mean)]))
-  
-  rmse_dataset[i] <- sqrt(mean((totalsInfo_mean[!is.na(totalsInfo_mean)] - 
-                        out1_dataset$value[out1_dataset$index==i][!is.na(totalsInfo_mean)])^2))
-  
-}
-
-#package results into a dataset
-data.frame(model = mymodel,
-           fold = fold,
-           dataset = dataset,
-           cor = cor(log(meanVals$obs),log(meanVals$pred)),
-           mad_mean = mean(mad_dataset),
-           mad_sd = sd(mad_dataset),
-           mad_median = quantile(mad_dataset, 0.5),
-           mad_lower = quantile(mad_dataset, 0.25),
-           mad_upper = quantile(mad_dataset, 0.75),
-           rmse_mean = mean(rmse_dataset),
-           rmse_sd = sd(rmse_dataset),
-           rmse_median = quantile(rmse_dataset, 0.5),
-           rmse_lower = quantile(rmse_dataset, 0.25),
-           rmse_upper = quantile(rmse_dataset, 0.75))
-}
-
-
-#apply function to the model outputs
-
-#standard model
-train_1 <- 1:5 %>%
-map_dfr(function(i)
-  testAbundanceCV(dataset = "train", mymodel = "linetransectModel_variables_CV.txt",fold = i)) 
-test_1 <- 1:5 %>%
-  map_dfr(function(i)
-    testAbundanceCV(dataset = "test", mymodel = "linetransectModel_variables_CV.txt",fold = i))
-
-#lasso model
-train_2 <- 1:5 %>%
-  map_dfr(function(i)
-    testAbundanceCV(dataset = "train", mymodel = "linetransectModel_variables_LASSO_CV.txt",fold = i)) 
-test_2 <- 1:5 %>%
-  map_dfr(function(i)
-    testAbundanceCV(dataset = "test", mymodel = "linetransectModel_variables_LASSO_CV.txt",fold = i))
-
-#model selection model
-train_3 <- 1:5 %>%
-  map_dfr(function(i)
-    testAbundanceCV(dataset = "train", mymodel = "linetransectModel_variables_ModelSelection_CV.txt",fold = i)) 
-test_3 <- 1:5 %>%
-  map_dfr(function(i)
-    testAbundanceCV(dataset = "test", mymodel = "linetransectModel_variables_ModelSelection_CV.txt",fold = i))
-
-#combine
-allCV <- bind_rows(train_1,test_1,train_2,test_2,train_3,test_3) 
-
-allCV$model <- as.factor(allCV$model)
-levels(allCV$model) <- c("Gaussian priors", "LASSO priors", "Variable indicator")
-allCV$model <- factor(allCV$model, levels = c("LASSO priors", "Variable indicator","Gaussian priors"))
-
-#plots
-ggplot(allCV) + 
-  geom_point(aes(x=fold,y=cor,colour=model))+
-  facet_wrap(~dataset)+
-  theme_bw() + ylab("Correlation coefficient")
-
-ggplot(allCV) + 
-  geom_pointrange(aes(x = fold, y = mad_median, ymin = mad_lower, ymax = mad_upper,
-                      colour=model))+
-  facet_wrap(~dataset)
-
-ggplot(allCV) + 
-  geom_pointrange(aes(x = fold, y = rmse_median, ymin = rmse_lower, ymax = rmse_upper,
-                      colour=model))+
-  facet_wrap(~dataset)
-  
-colMeans(subset(allCV, model=="Variable indicator" & dataset=="train")[,-c(1:3)])
-
-colMeans(subset(allCV, model=="Variable indicator" & dataset=="test")[,-c(1:3)])
-
-
-### cross validation 2 ###################################
-
-#for those that were processed in the HPC script
+### cross validation ###################################
 
 modelTaskID <- read.delim(paste("data","modelTaskID_occuModel_CV.txt",sep="/"),as.is=T)
-
 
 #MAD
 madFiles <- list.files("model-outputs/SLURM/distanceModel/CV", full.names=TRUE) %>%
@@ -959,13 +501,13 @@ rmseData <- rmseFiles %>%
   dplyr::mutate(Type = map_chr(file, ~strsplit(.x, "_")[[1]][2])) %>% 
   left_join(.,modelTaskID)
 
-
 #get mean and range for each Model
 rmseData %>%
   dplyr::group_by(Model, Type) %>%
   dplyr::summarise(median = median(Mean),min=min(Mean),max(max(Mean)))
 
 ### COMBINED model #####################################
+
 #### full models ####
 
 #from combined model:
