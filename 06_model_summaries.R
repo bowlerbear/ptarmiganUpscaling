@@ -508,81 +508,53 @@ rmseData %>%
 
 ### COMBINED model #####################################
 
-#### full models ####
+siteInfo_Occ <- readRDS("data/siteInfo_ArtsDaten.rds",sep="/")
+siteInfo_Abund <- readRDS("data/siteInfo_AbundanceModels.rds",sep="/")
 
-#from combined model:
-out1 <- readRDS("model-outputs/SLURM/combinedModel/outSummary_fullCombinedModel.rds")
-
-out1 <- as.data.frame(out1)
-out1$Param <- row.names(out1)
-subset(out1,grepl("total.pop",out1$Param))
-subset(out1,grepl("annual.pop",out1$Param))#infinity
-subset(out1,grepl("grid.pop",out1$Param))
-
-#all huge
-
-#### simple models ####
-#or get data from "HPC_simple_combined_analysis:
-out2 <- data.frame(out1$summary)
-out2$Param <- row.names(out2)
-preds <- subset(out2,grepl("realAbund",out2$Param))
-siteInfo_Occ$preds <- preds$mean
-summary(siteInfo_Occ$preds)#minus numbers??? 
-
-#bound to reasonable
-siteInfo_Occ$preds[siteInfo_Occ$preds<0] <- 0
-siteInfo_Occ$preds[siteInfo_Occ$preds>500] <- 500
-
+#plot occupancy preds
+reaRDS(predsOcc_summary)
+siteInfo_Occ$preds <- predsOcc_summary$myMean
 mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
-crs(mygrid) <- equalM
-total_tmap <- tm_shape(mygrid)+
-  tm_raster(title="Abundance",palette="YlGnBu",style="cont")
-total_tmap
+mygrid[siteInfo_Occ$grid] <-siteInfo_Occ$preds
+plot(mygrid)
 
-#plot uncertainty too
-siteInfo_Occ$preds <- preds$sd
+#plot density preds
+readRDS(predsDensity_summary)
+siteInfo_Abund $preds <- predsDensity_summary$myMean
 mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
-crs(mygrid) <- equalM
-sd_tmap <- tm_shape(mygrid)+
-  tm_raster(title="SD",palette="YlGnBu",n=6,style="cont")
-sd_tmap
+mygrid[siteInfo_Abund$grid] <-siteInfo_Abund$preds
+plot(mygrid)
 
-tmap_arrange(total_tmap, sd_tmap, nrow = 1)
+#look at annual preds
+readRDS("population_Annual")
 
-### other ##################################################
+#look at mean preds
 
-#relationship between mean and uncertainity
-qplot(mean,sd^2,data=preds)+stat_smooth(method="lm")
-#positive....
+ggplot(totalSummary)+
+  geom_density(aes(totalPop),fill="red",colour="red",alpha=0.2)+
+  theme_few()+
+  ylab("Probability density") + xlab("Total population size estimate")
 
-#get residuals of the relationship
-preds$var <- preds$sd^2
-preds$resid_sd <- preds$var/preds$mean
-preds$resid_sd[preds$resid_sd<0] <- 0 #where we have more variation than expected given the mean
-summary(preds$resid_sd)
-preds$resid_sd[preds$resid_sd>60] <- 60
+summary(totalSummary$totalPop)
 
-#plot it
-siteInfo_Occ$preds <- preds$resid_sd
-mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
-resid_tmap <- tm_shape(mygrid)+
-  tm_raster(title="Overdispersion",palette="YlGnBu")
-resid_tmap
+#short cut
+sum(predsOcc_summary$myMean)
+mean(predsDensity_summary$myMean)
+sum(predsOcc_summary$myMean)*mean(predsDensity_summary$myMean)
 
-#side by side
-tmap_arrange(sd_tmap,resid_tmap,nrow=1)
+# library(ggridges)
+# 
+# ggd1 <- ggd
+# ggd1$Model <- "Gaussian priors"
+# ggd2 <- ggd 
+# ggd2$Model <- "LASSO priors"
+# ggd3 <- ggd
+# ggd3$Model <- "Variable indicator priors"
+# 
+# all_ggd <- rbind(ggd1,ggd2,ggd3)
+# 
+# ggplot(all_ggd, aes(x = value, y = Model)) + geom_density_ridges2()+
+#   theme_minimal()+xlab("Total population size")
+# 
+# quantile(ggd$value,c(0.025,0.5,0.975))
 
-#multiple them???
-siteInfo_Occ$preds <- sqrt(preds$resid_sd * preds$sd)
-siteInfo_Occ$preds[siteInfo_Occ$preds<=0] <- 0.001
-summary(siteInfo_Occ$preds)
-mygrid[] <- NA
-mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
-combined <- tm_shape(mygrid)+
-  tm_raster(title="Combined",palette="YlGnBu",style="cont")
-
-tmap_arrange(sd_tmap,resid_tmap,combined, nrow=1)
-#model effect of number of CS data points of each type? not here, elsewhere
