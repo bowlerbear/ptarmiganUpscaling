@@ -56,13 +56,6 @@
     #intercept
     int.d ~ dnorm(0,0.001)    
     
-    #random line effect
-    line.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
-    line.d.tau <- pow(line.d.sd,-2)
-    for(j in 1:nsite_train){
-      random.d.line[j] ~ dnorm(0,line.d.tau)
-    }
-    
     #random year effect
     year.d.sd ~ dt(0, pow(2.5,-2), 1)T(0,)
     year.d.tau <- pow(year.d.sd,-2)
@@ -74,6 +67,7 @@
     for(i in 1:n.covs){
       beta[i] ~ dnorm(0,0.01)
     }
+
 
     #Observation model:
     r ~ dunif(0,50)
@@ -117,10 +111,8 @@
       mid.expNuIndivs_train[j] <- expNuIndivs[j,6]
     }
     
-     for(j in 1:nsite_test){
+    for(j in 1:nsite_test){
       mid.expNuIndivs_test[j] <- expNuIndivs_test[j,6]
     }
     
-    
     }
-    

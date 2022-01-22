@@ -133,9 +133,9 @@ sum(as.numeric(totalsInfo),na.rm=T)
 meanTL = apply(transectLengths,1,function(x)median(x[x!=0]))
 for(i in 1:nrow(transectLengths)){
   for(j in 1:ncol(transectLengths)){
-    transectLengths[i,j] <- ifelse(transectLengths[i,j]==0,
-                                   meanTL[i],
-                                   transectLengths[i,j])
+     transectLengths[i,j] <- ifelse(transectLengths[i,j]==0,
+                                    meanTL[i],
+                                    transectLengths[i,j])
   }
 }
 
@@ -237,7 +237,7 @@ names(bugs.data)
 
 all(bufferData$LinjeID==siteInfo$LinjeID)
 
-myVars <- c("bio1", "bio5", "bio6","MountainBirchForest", "Bog","ODF",
+myVars <- c("bio1", "bio5","y","bio6","MountainBirchForest", "Bog","ODF",
             "Meadows","OSF","Mire","SnowBeds",
             "tree_line_position","tree_line","distCoast")
 
@@ -274,14 +274,14 @@ if(mymodel == "linetransectModel_variables.txt"){
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
-                                  bufferData$tree_line +
-                                  I(bufferData$tree_line^2))[,-1]
+                                  bufferData$tree_line_position +
+                                  I(bufferData$tree_line_position^2))[,-1]
 
 #predictions to full grid
 bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                    siteInfo_ArtsDaten$bio5 +
-                                   siteInfo_ArtsDaten$tree_line +
-                                   I(siteInfo_ArtsDaten$tree_line^2))[,-1]
+                                   siteInfo_ArtsDaten$tree_line_position +
+                                   I(siteInfo_ArtsDaten$tree_line_position^2))[,-1]
 
 ### indicator model selection ################################
 
@@ -290,8 +290,9 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
   
 bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
+                                  bufferData$y +
                                   bufferData$distCoast +
-                                  bufferData$tree_line +
+                                  bufferData$tree_line_position +
                                   bufferData$MountainBirchForest +
                                   bufferData$Bog +
                                   bufferData$ODF +
@@ -301,8 +302,9 @@ bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$SnowBeds +
                                   I(bufferData$bio6^2) +
                                   I(bufferData$bio5^2) +
+                                  I(bufferData$y^2) +
                                   I(bufferData$distCoast^2) +
-                                  I(bufferData$tree_line^2) +
+                                  I(bufferData$tree_line_position^2) +
                                   I(bufferData$MountainBirchForest^2) +
                                   I(bufferData$Bog^2) +
                                   I(bufferData$ODF^2) +
@@ -314,8 +316,9 @@ bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
 # #predictions to full grid
 bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   siteInfo_ArtsDaten$bio5 +
+                                  siteInfo_ArtsDaten$y +
                                   siteInfo_ArtsDaten$distCoast +
-                                  siteInfo_ArtsDaten$tree_line +
+                                  siteInfo_ArtsDaten$tree_line_position +
                                   siteInfo_ArtsDaten$MountainBirchForest +
                                   siteInfo_ArtsDaten$Bog +
                                   siteInfo_ArtsDaten$ODF +
@@ -325,8 +328,9 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   siteInfo_ArtsDaten$SnowBeds +
                                   I(siteInfo_ArtsDaten$bio6^2) +
                                   I(siteInfo_ArtsDaten$bio5^2) +
+                                  I(siteInfo_ArtsDaten$y^2) +
                                   I(siteInfo_ArtsDaten$distCoast^2) +
-                                  I(siteInfo_ArtsDaten$tree_line^2) +
+                                  I(siteInfo_ArtsDaten$tree_line_position^2) +
                                   I(siteInfo_ArtsDaten$MountainBirchForest^2) +
                                   I(siteInfo_ArtsDaten$Bog^2) +
                                   I(siteInfo_ArtsDaten$ODF^2) +
@@ -359,8 +363,8 @@ library(jagsUI)
 
 params <- c("int.d","beta","g","r",
             "b.group.size","meanESW",
-            "meanDensity","Density.p","exp",
-            "bpv","mid.expNuIndivs")
+            "meanDensity","Density.p","exp.j",
+            "bpv","expNuIndivs")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
@@ -372,13 +376,14 @@ modelfile <- paste(myfolder,mymodel,sep="/")
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1")) 
 #n.cores = 3
 
-n.iterations = 8000
+n.iterations = 50000
 
+Sys.time()
 out1 <- jags(bugs.data, 
              inits=NULL, 
              params, 
              modelfile, 
-             n.thin=10,
+             n.thin=50,
              n.chains=n.cores, 
              n.burnin=n.iterations/2,
              n.iter=n.iterations,
@@ -386,12 +391,34 @@ out1 <- jags(bugs.data,
 
 saveRDS(out1$summary,file=paste0("outSummary_linetransectModel_variables_",task.id,".rds"))
 
-### fit #######################################################
+print("Done main model")
+Sys.time()
+
+### summary ###################################################
+
+temp <- data.frame(out1$summary)
+temp$Param <- row.names(temp)
+
+#look at MAD for each year
+for(i in 1:bugs.data$nyear){
+  mypattern <- paste0(",",i,"]")
+  temp_train <- subset(temp, grepl("expNuIndivs", temp$Param))
+  temp_train <- subset(temp_train, grepl(mypattern, temp_train$Param))$mean
+  data_train <- bugs.data$NuIndivs[,i]
+  message(paste("Results in year", i, sep=" "))
+  print(summary(abs(data_train[!is.na(data_train)] - temp_train[!is.na(data_train)])))
+  print(cor(data_train[!is.na(data_train)],temp_train[!is.na(data_train)]))
+}
+
+print("Simple stats done now")
+
+### samples #######################################################
 
 library(ggmcmc)
 
 ggd <- ggs(out1$samples)
-out1_dataset <- subset(ggd,grepl("mid.expNuIndivs",ggd$Parameter))
+out1_dataset <- subset(ggd,grepl("expNuIndivs",ggd$Parameter))
+out1_dataset <- subset(out1_dataset,grepl(",6]",out1_dataset$Parameter))
 out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
 
 #get actual NuIndiv
@@ -419,11 +446,14 @@ summary(rmse_dataset)
 saveRDS(summary(mad_dataset),file=paste0("MAD_linetransectModel_variables_",task.id,".rds"))
 saveRDS(summary(rmse_dataset),file=paste0("RMSE_linetransectModel_variables_",task.id,".rds"))
 
+print("Done model assessment")
+
 ### get site and year predictions ############################
 
-out2 <- update(out1, parameters.to.save = c("Density.pt"),n.iter=2000)
+out2 <- update(out1, parameters.to.save = c("Density.pt"),n.iter=10000, n.thin=50)
 ggd <- ggs(out2$samples)
 saveRDS(ggd,file=paste0("Density.pt_linetransectModel_variables_",task.id,".rds"))
         
+print("end")
 ### end #######################################################
 

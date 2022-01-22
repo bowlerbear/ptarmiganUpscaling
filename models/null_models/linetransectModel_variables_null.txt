@@ -105,31 +105,27 @@
         NuIndivs.new[j,t] ~ dnegbin(p[j,t],r)
         
       }
+      
+      #get means since we are just interested in spatial variation
+      exp.j[j] <- mean(exp[j,])
+      NuIndivs.j[j] <- mean(NuIndivs[j,])
+      NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])
+      
     }
     
-    e <- 0.0001
-    
-    #do discrepancy 
+    #do discrepancy for each site F-T 
     for(j in 1:nsite){
-      for(t in 1:nyear){
-        
         #compared to data
-        chi2[j,t] <- pow((NuIndivs[j,t] - exp[j,t]),2) / (sqrt(exp[j,t])+e)
+        chi2[j] <- pow((pow(NuIndivs.j[j], 0.5) - pow(exp.j[j], 0.5)),2)
         
         #compared to simulated values
-        chi2.new[j,t] <- pow((NuIndivs.new[j,t] - exp[j,t]),2) / (sqrt(exp[j,t])+e) 
+        chi2.new[j] <- pow((pow(NuIndivs.new.j[j], 0.5) - pow(exp.j[j], 0.5)),2) 
         
-     } 
     }
     
     # Add up discrepancy measures for entire data set
-    for(j in 1:nsite){
-      fit.j <- sum(chi2[j,])                     
-      fit.new.j <- sum(chi2.new[j,]) 
-    }
-    
-      fit <- sum(fit.j)
-      fit.new <- sum(fit.new.j)
+      fit <- sum(chi2)
+      fit.new <- sum(chi2.new)
       
       test <- step(fit.new-fit) 	
       bpv <- mean(test)
