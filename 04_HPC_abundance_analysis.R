@@ -128,6 +128,13 @@ groupSizes <- reshape2::acast(tlDF,siteIndex~Year,value.var="groupSize")
 transectLengths <- reshape2::acast(tlDF,siteIndex~Year,value.var="length")
 sum(as.numeric(totalsInfo),na.rm=T)
 
+### get observed max density ######################################
+
+#transectArea <- (transectLengths/1000 * 0.1 * 2)
+#summary(totalsInfo/transectArea)
+
+### transect lengths ##############################################
+
 #where there is a NA for transect length - put the mean for the line
 #just for imputation purposes
 meanTL = apply(transectLengths,1,function(x)median(x[x!=0]))
@@ -207,6 +214,7 @@ summary(siteInfo_ArtsDaten$siteIndex_All)
 siteInfo <- siteInfo %>% arrange(siteIndex)
 siteInfo_ArtsDaten <- siteInfo_ArtsDaten %>% arrange(siteIndex_All)
 
+
 ### make bugs objects ###########################################
 
 bugs.data <- list(#For the state model
@@ -239,7 +247,7 @@ all(bufferData$LinjeID==siteInfo$LinjeID)
 
 myVars <- c("bio1", "bio5","y","bio6","MountainBirchForest", "Bog","ODF",
             "Meadows","OSF","Mire","SnowBeds",
-            "tree_line_position","tree_line","distCoast")
+            "tree_line_position","tree_line","distCoast","elevation")
 
 # scale them
 bufferData <- bufferData[,c("LinjeID",myVars)]
@@ -251,9 +259,12 @@ for(i in 2:ncol(bufferData)){
 
 #also for the siteInfo_ArtsDaten with same scaling
 siteInfo_ArtsDaten <- siteInfo_ArtsDaten[,c("grid",myVars)]
-for(i in 2:ncol(siteInfo_ArtsDaten)){
+for(i in 2:(ncol(siteInfo_ArtsDaten)-1)){#dont scale elevation
   siteInfo_ArtsDaten[,i] <- (siteInfo_ArtsDaten[,i] - bufferMeans[i])/bufferSD[i]
 }
+
+
+saveRDS(siteInfo_ArtsDaten, file="data/siteInfo_AbundanceModels.rds")
 
 ### choose model ##############################################
 
