@@ -64,7 +64,7 @@ listlengthDF$L[is.na(listlengthDF$L)] <- 1 #set to nominal effort
 #fit as glm with explanatory variables - binary response
 
 #get y per grid
-occupancyGrid <- ddply(listlengthDF,.(grid),summarise,species=max(y,na.rm=T))
+occupancyGrid <- plyr::ddply(listlengthDF,.(grid),summarise,species=max(y,na.rm=T))
 occupancyGrid <- subset(occupancyGrid,!is.infinite(species))
 mean(occupancyGrid$species)
 
