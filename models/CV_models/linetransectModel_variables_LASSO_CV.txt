@@ -117,10 +117,12 @@
     
     for(j in 1:nsite_train){
       mid.expNuIndivs_train[j] <- expNuIndivs[j,6]
+      mean.expNuIndivs_train[j] <- mean(expNuIndivs[j,])
     }
     
-     for(j in 1:nsite_test){
+    for(j in 1:nsite_test){
       mid.expNuIndivs_test[j] <- expNuIndivs_test[j,6]
+      mean.expNuIndivs_test[j] <- mean(expNuIndivs_test[j,])
     }
     
     
