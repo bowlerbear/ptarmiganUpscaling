@@ -264,7 +264,7 @@ for(i in 2:(ncol(siteInfo_ArtsDaten)-1)){#dont scale elevation
 }
 
 
-saveRDS(siteInfo_ArtsDaten, file="data/siteInfo_AbundanceModels.rds")
+#saveRDS(siteInfo_ArtsDaten, file="data/siteInfo_AbundanceModels.rds")
 
 ### choose model ##############################################
 
@@ -285,14 +285,14 @@ if(mymodel == "linetransectModel_variables.txt"){
 #add new variables to the bugs data
 bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
-                                  bufferData$tree_line_position +
-                                  I(bufferData$tree_line_position^2))[,-1]
+                                  bufferData$tree_line +
+                                  I(bufferData$tree_line^2))[,-1]
 
 #predictions to full grid
 bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                    siteInfo_ArtsDaten$bio5 +
-                                   siteInfo_ArtsDaten$tree_line_position +
-                                   I(siteInfo_ArtsDaten$tree_line_position^2))[,-1]
+                                   siteInfo_ArtsDaten$tree_line +
+                                   I(siteInfo_ArtsDaten$tree_line^2))[,-1]
 
 ### indicator model selection ################################
 
@@ -303,7 +303,7 @@ bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   bufferData$bio5 +
                                   bufferData$y +
                                   bufferData$distCoast +
-                                  bufferData$tree_line_position +
+                                  bufferData$tree_line +
                                   bufferData$MountainBirchForest +
                                   bufferData$Bog +
                                   bufferData$ODF +
@@ -315,7 +315,7 @@ bugs.data$occDM <- model.matrix(~ bufferData$bio6 +
                                   I(bufferData$bio5^2) +
                                   I(bufferData$y^2) +
                                   I(bufferData$distCoast^2) +
-                                  I(bufferData$tree_line_position^2) +
+                                  I(bufferData$tree_line^2) +
                                   I(bufferData$MountainBirchForest^2) +
                                   I(bufferData$Bog^2) +
                                   I(bufferData$ODF^2) +
@@ -329,7 +329,7 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   siteInfo_ArtsDaten$bio5 +
                                   siteInfo_ArtsDaten$y +
                                   siteInfo_ArtsDaten$distCoast +
-                                  siteInfo_ArtsDaten$tree_line_position +
+                                  siteInfo_ArtsDaten$tree_line +
                                   siteInfo_ArtsDaten$MountainBirchForest +
                                   siteInfo_ArtsDaten$Bog +
                                   siteInfo_ArtsDaten$ODF +
@@ -341,7 +341,7 @@ bugs.data$predDM <- model.matrix(~ siteInfo_ArtsDaten$bio6 +
                                   I(siteInfo_ArtsDaten$bio5^2) +
                                   I(siteInfo_ArtsDaten$y^2) +
                                   I(siteInfo_ArtsDaten$distCoast^2) +
-                                  I(siteInfo_ArtsDaten$tree_line_position^2) +
+                                  I(siteInfo_ArtsDaten$tree_line^2) +
                                   I(siteInfo_ArtsDaten$MountainBirchForest^2) +
                                   I(siteInfo_ArtsDaten$Bog^2) +
                                   I(siteInfo_ArtsDaten$ODF^2) +
@@ -375,7 +375,7 @@ library(jagsUI)
 params <- c("int.d","beta","g","r",
             "b.group.size","meanESW",
             "meanDensity","Density.p","exp.j",
-            "bpv","expNuIndivs")
+            "bpv","MAD","expNuIndivs")
 
 #choose model - already done above now
 #modelfile <- paste(myfolder,"linetransectModel_variables.txt",sep="/")
@@ -462,9 +462,15 @@ print("Done model assessment")
 ### get site and year predictions ############################
 
 out2 <- update(out1, parameters.to.save = c("Density.pt"),n.iter=10000, n.thin=50)
+
+#summary
+saveRDS(out2$summary,file=paste0("Density.pt_Summary_linetransectModel_variables_",task.id,".rds"))
+
+#and samples
 ggd <- ggs(out2$samples)
 saveRDS(ggd,file=paste0("Density.pt_linetransectModel_variables_",task.id,".rds"))
         
 print("end")
+
 ### end #######################################################
 
