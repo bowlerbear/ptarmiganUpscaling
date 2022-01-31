@@ -208,8 +208,12 @@
       exp.j[j] <- mean(exp[j,])
       NuIndivs.j[j] <- mean(NuIndivs[j,])
       NuIndivs.new.j[j] <- mean(NuIndivs.new[j,])
+      mad.diff[j] <- abs(exp.j[j] - NuIndivs.j[j])
       
     }
+    
+    #get MAD
+    MAD <- mean(mad.diff)
     
     #do discrepancy for each site F-T 
     for(j in 1:nsite){
