@@ -53,7 +53,7 @@ out1$Param <- row.names(out1)
 table(out1$Rhat<1.1)
 
 #Z
-preds <- subset(out1,grepl("grid.z",out1$Param))
+preds <- z_preds <- subset(out1,grepl("grid.z",out1$Param))
 siteInfo_Occ$preds <- preds$mean
 mygrid[] <- NA
 mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
@@ -366,6 +366,8 @@ subset(out1,grepl("bpv",out1$Param))
 
 ### MAD ###################################################
 
+subset(out1,grepl("MAD",out1$Param))
+
 #MAD
 list.files("model-outputs/SLURM/distanceModel", full.names=TRUE) %>%
   str_subset("MAD")  %>%
@@ -508,53 +510,118 @@ rmseData %>%
 
 ### COMBINED model #####################################
 
-siteInfo_Occ <- readRDS("data/siteInfo_ArtsDaten.rds",sep="/")
-siteInfo_Abund <- readRDS("data/siteInfo_AbundanceModels.rds",sep="/")
+modelFolder <- "model-outputs/SLURM/combinedModel/"
+
+#choose model
+models = c(" _1 ")
+models = c(" _2 ")
+models = c(" _3 ")
+
+siteInfo_Occ <- readRDS("data/siteInfo_ArtsDaten.rds")
+siteInfo_Abund <- readRDS("data/siteInfo_AbundanceModels.rds")
 
 #plot occupancy preds
-reaRDS(predsOcc_summary)
+predsOcc_summary <- readRDS(paste0(modelFolder,"predsOcc_summary", models,".rds"))
 siteInfo_Occ$preds <- predsOcc_summary$myMean
 mygrid[] <- NA
 mygrid[siteInfo_Occ$grid] <-siteInfo_Occ$preds
 plot(mygrid)
 
 #plot density preds
-readRDS(predsDensity_summary)
+predsDensity_summary <- readRDS(paste0(modelFolder,"predsDensity_summary", models,".rds"))
 siteInfo_Abund $preds <- predsDensity_summary$myMean
 mygrid[] <- NA
 mygrid[siteInfo_Abund$grid] <-siteInfo_Abund$preds
 plot(mygrid)
 
 #look at annual preds
-readRDS("population_Annual")
+(populationAnnual <- readRDS(paste0(modelFolder,"population_Annual", 
+                                       models,".rds")))
+
+populationAnnual %>%
+  mutate(Year = as.numeric(Year)+2007) %>%
+  ggplot()+
+  geom_pointrange(aes(x=Year, y=medianPop, 
+                      ymin=lowerPop, ymax=upperPop))+
+  ylab("Predicted national population size")+
+  scale_x_continuous(breaks=c(2008,2012,2016),
+                     labels=c(2008,2012,2016))+
+  theme_few()
 
 #look at mean preds
+totalSummary <- readRDS(paste0(modelFolder,"totalSummary", models,".rds"))
 
-ggplot(totalSummary)+
-  geom_density(aes(totalPop),fill="red",colour="red",alpha=0.2)+
+ggplot(totalSummary, aes(totalPop))+
+  geom_density(fill="red",colour="black",alpha=0.2)+
+  geom_density(colour="black", size=2)+
   theme_few()+
   ylab("Probability density") + xlab("Total population size estimate")
+ggsave("plots/Fig.5.png",width=5,height=4)
 
 summary(totalSummary$totalPop)
+quantile(totalSummary$totalPop,c(0.025,0.5,0.975))
 
 #short cut
 sum(predsOcc_summary$myMean)
 mean(predsDensity_summary$myMean)
 sum(predsOcc_summary$myMean)*mean(predsDensity_summary$myMean)
+#with model 3 - 1207997
 
-# library(ggridges)
-# 
-# ggd1 <- ggd
-# ggd1$Model <- "Gaussian priors"
-# ggd2 <- ggd 
-# ggd2$Model <- "LASSO priors"
-# ggd3 <- ggd
-# ggd3$Model <- "Variable indicator priors"
-# 
-# all_ggd <- rbind(ggd1,ggd2,ggd3)
-# 
-# ggplot(all_ggd, aes(x = value, y = Model)) + geom_density_ridges2()+
-#   theme_minimal()+xlab("Total population size")
-# 
-# quantile(ggd$value,c(0.025,0.5,0.975))
+#compare priors
+library(ggridges)
+all_ggd <- list.files(modelFolder, full.names=TRUE) %>%
+            str_subset("totalSummary") %>%
+            set_names() %>%
+            map_dfr(readRDS, .id="source") %>%
+            as_tibble()
 
+all_ggd$Model <- NA
+all_ggd$Model[all_ggd$source=="model-outputs/SLURM/combinedModel/totalSummary _1 .rds"] <- "Only important vars"
+all_ggd$Model[all_ggd$source=="model-outputs/SLURM/combinedModel/totalSummary _2 .rds"] <- "LASSO priors"
+all_ggd$Model[all_ggd$source=="model-outputs/SLURM/combinedModel/totalSummary _3 .rds"] <- "Variable indicator"
+
+all_ggd$totalPop[all_ggd$Model=="LASSO priors" & all_ggd$totalPop>2000000] <- 2000000
+all_ggd$totalPop[all_ggd$Model=="LASSO priors" & all_ggd$totalPop<1000000] <- 1000000
+
+ggplot(all_ggd, aes(x = totalPop, y = Model)) + 
+  geom_density_ridges2()+
+   theme_minimal()+xlab("Total population size")+
+   xlim(900000,1800000)
+ 
+ggplot(all_ggd, aes(totalPop))+
+  geom_density(fill="red",colour="black",alpha=0.2)+
+  geom_density(colour="black", size=2)+
+  theme_few()+
+  facet_wrap(~Model,scales="free")+
+  ylab("Probability density") + xlab("Total population size estimate")
+
+### make model predictions ####
+
+varDF <- readRDS("data/varDF_allEnvironData_5km_idiv.rds")
+
+#run sections above to get z_preds
+out_occ <- z_preds
+
+#abundance predictions
+out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
+out1 <- data.frame(out1)
+out1$Param <- row.names(out1)
+out1 <- subset(out1,grepl("Density.p",out1$Param))
+
+#remove extreme preds
+out_dens <- subset(out1, mean<850)
+out_occ <- out_occ[out1$mean<850,]
+varDF <- varDF[out1$mean<850,]
+
+#make modelPredictions
+modelPredictions <- data.frame(density_mean=out_dens$mean, density_sd = out_dens$sd,
+                               occ_mean=out_occ$mean, occ_sd = out_occ$sd)
+
+#add x and y
+modelPredictions$x <- varDF$x
+modelPredictions$y <- varDF$y
+
+saveRDS(modelPredictions, file="data/modelPredictions.rds")
+
+### end #####
+  
