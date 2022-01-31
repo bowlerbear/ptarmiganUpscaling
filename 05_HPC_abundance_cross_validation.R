@@ -205,6 +205,7 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
   
   bugs.data$occDM_train <- model.matrix(~ bufferData_train$bio6 +
                                     bufferData_train$bio5 +
+                                    bufferData_train$y +
                                     bufferData_train$distCoast +
                                     bufferData_train$tree_line +
                                     bufferData_train$MountainBirchForest +
@@ -216,6 +217,7 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
                                     bufferData_train$SnowBeds +
                                     I(bufferData_train$bio6^2) +
                                     I(bufferData_train$bio5^2) +
+                                    I(bufferData_train$y^2) +
                                     I(bufferData_train$distCoast^2) +
                                     I(bufferData_train$tree_line^2) +
                                     I(bufferData_train$MountainBirchForest^2) +
@@ -229,6 +231,7 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
   # #predictions to full grid
   bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
                                      bufferData_test$bio5 +
+                                     bufferData_test$y +
                                      bufferData_test$distCoast +
                                      bufferData_test$tree_line +
                                      bufferData_test$MountainBirchForest +
@@ -240,6 +243,7 @@ bugs.data$occDM_test <- model.matrix(~ bufferData_test$bio6 +
                                      bufferData_test$SnowBeds +
                                      I(bufferData_test$bio6^2) +
                                      I(bufferData_test$bio5^2) +
+                                     I(bufferData_test$y^2) +
                                      I(bufferData_test$distCoast^2) +
                                      I(bufferData_test$tree_line^2) +
                                      I(bufferData_test$MountainBirchForest^2) +
@@ -259,7 +263,8 @@ library(rjags)
 library(jagsUI)
 
 params <- c("int.d","line.d.sd","year.d.sd","beta",
-            "mid.expNuIndivs_train","mid.expNuIndivs_test")
+            "mid.expNuIndivs_train","mid.expNuIndivs_test",
+            "mean.expNuIndivs_train","mean.expNuIndivs_test")
 
 modelfile <- paste(myfolder,mymodel,sep="/")
 
@@ -283,7 +288,7 @@ saveRDS(out1$summary,file="outSummary_linetransectModel_CV.rds")
 Sys.time()
 print("Done main model")
 
-### summary ###################################
+### summary annual ###################################
 
 temp <- data.frame(out1$summary)
 temp$Param <- row.names(temp)
@@ -300,9 +305,24 @@ data_test <- totalsInfo_test[,6]
 mean(abs(data_test[!is.na(data_test)] - temp_test[!is.na(data_test)]))
 cor.test(data_test[!is.na(data_test)],temp_test[!is.na(data_test)])
 
-print("Simple stats done now")
+print("Simple annual stats done now")
 
-### samples ###################################
+### summary mean #############################
+
+temp_train <- subset(temp, grepl("mean.expNuIndivs_train", temp$Param))$mean
+data_train <- as.numeric(apply(bugs.data$NuIndivs,1,mean,na.rm=T))
+mean(abs(data_train[!is.na(data_train)] - temp_train[!is.na(data_train)]))
+cor.test(data_train[!is.na(data_train)],temp_train[!is.na(data_train)])
+
+#test
+temp_test <- subset(temp, grepl("mean.expNuIndivs_test", temp$Param))$mean
+data_test <- as.numeric(apply(totalsInfo_test,1,mean,na.rm=T))
+mean(abs(data_test[!is.na(data_test)] - temp_test[!is.na(data_test)]))
+cor.test(data_test[!is.na(data_test)],temp_test[!is.na(data_test)])
+
+print("Simple mean stats done now")
+
+### annual samples ###################################
 
 library(ggmcmc)
 ggd <- ggs(out1$samples)
@@ -363,6 +383,69 @@ summary(rmse_dataset)
 
 saveRDS(summary(mad_dataset),file=paste0("MAD_test_linetransectModel_CV_",task.id,".rds"))
 saveRDS(summary(rmse_dataset),file=paste0("RMSE_test_linetransectModel_CV_",task.id,".rds"))
+
+### mean samples ###################################
+
+library(ggmcmc)
+ggd <- ggs(out1$samples)
+
+#train
+out1_dataset <- subset(ggd,grepl("mean.expNuIndivs_train",ggd$Parameter))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
+
+#get actual NuIndiv
+totalsInfo_mid <- as.numeric(apply(totalsInfo,1,mean,na.rm=T))
+useData <- !is.na(totalsInfo_mid)
+
+#get difference between this value and the simulated values
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
+
+for(i in 1:n.index){
+  
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[useData] - 
+                               out1_dataset$value[out1_dataset$index==i][useData]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[useData] - 
+                                  out1_dataset$value[out1_dataset$index==i][useData])^2))
+  
+}
+
+summary(mad_dataset)
+summary(rmse_dataset)
+
+saveRDS(summary(mad_dataset),file=paste0("mMAD_train_linetransectModel_CV_",task.id,".rds"))
+saveRDS(summary(rmse_dataset),file=paste0("mRMSE_train_linetransectModel_CV_",task.id,".rds"))
+
+#test
+out1_dataset <- subset(ggd,grepl("mean.expNuIndivs_test",ggd$Parameter))
+out1_dataset$index <- as.numeric(interaction(out1_dataset$Iteration,out1_dataset$Chain))
+
+#get actual NuIndiv
+totalsInfo_mid <- as.numeric(apply(totalsInfo_test,1,mean,na.rm=T))
+useData <- !is.na(totalsInfo_mid)
+
+#get difference between this value and the simulated values
+mad_dataset <- as.numeric()
+rmse_dataset <- as.numeric()
+n.index <- max(out1_dataset$index)
+
+for(i in 1:n.index){
+  mad_dataset[i] <- mean(abs(totalsInfo_mid[useData] - 
+                               out1_dataset$value[out1_dataset$index==i][useData]))
+  
+  rmse_dataset[i] <- sqrt(mean((totalsInfo_mid[useData] - 
+                                  out1_dataset$value[out1_dataset$index==i][useData])^2))
+  
+}
+
+summary(mad_dataset)
+summary(rmse_dataset)
+
+saveRDS(summary(mad_dataset),file=paste0("mMAD_test_linetransectModel_CV_",task.id,".rds"))
+saveRDS(summary(rmse_dataset),file=paste0("mRMSE_test_linetransectModel_CV_",task.id,".rds"))
+
 
 print("End")
 
