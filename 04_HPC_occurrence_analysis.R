@@ -303,8 +303,7 @@ params <- c("beta","g",
             "beta.effort","beta.effort2",
             "beta.det.open","beta.det.bio5","beta.det.bio6",
             "beta.det.tlp","beta.det.tlp2",
-            "bpv",
-            "grid.z","grid.psi")
+            "bpv","grid.z","grid.psi")
 
 #chosen already earlier
 #modelfile <- "/data/idiv_ess/ptarmiganUpscaling/BUGS_occuModel_upscaling.txt"
@@ -316,7 +315,7 @@ modelfile <- paste(myfolder,mymodel,sep="/")
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
 #n.cores = 3
 
-n.iterations = 10000
+n.iterations = 20000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
@@ -333,7 +332,8 @@ saveRDS(out1$summary,file=paste0("outSummary_occModel_upscaling_",task.id,".rds"
 ### get AUC ##########################################################
 
 #update by a small number and get full model
-out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py","Py.pred"),n.iter=2000)
+out2 <- update(out1, parameters.to.save = c("mid.psi","mid.z","Py","Py.pred"),n.iter=2000,
+               n.thin = 10)
 
 library(ggmcmc)
 ggd2 <- ggs(out2$samples)
@@ -394,7 +394,6 @@ for (i in 1:nu_Iteractions){
 summary(AUC_py)
 saveRDS(summary(AUC_py),file=paste0("AUC_py_occModel_upscaling_",task.id,".rds"))
 
-
 #Y against Py_pred (psi x p) - pull out one year
 Py_preds <- subset(ggd2,grepl("Py.pred",ggd2$Parameter))
 Py_preds$Iteration <- as.numeric(interaction(Py_preds$Iteration,Py_preds$Chain))
@@ -425,6 +424,17 @@ saveRDS(summary(AUC_py),file=paste0("AUC_pypred_occModel_upscaling_",task.id,".r
 
 ### get full z and psi ##########################################################
 
-out2 <- update(out1, parameters.to.save = c("z"),n.iter=2000)
+out2 <- update(out1, parameters.to.save = c("z","psi"),n.iter=2000, n.thin = 10)
+
+#save summary
+saveRDS(out2$summary,file=paste0("Z_summary_occModel_upscaling_",task.id,".rds"))
+
+#save z and psi samples
+library(ggmcmc)
 ggd <- ggs(out2$samples)
-saveRDS(ggd,file=paste0("Z_occModel_upscaling_",task.id,".rds"))
+
+ggd2 <- subset(ggd,grepl("z",ggd$Parameter))
+saveRDS(ggd2,file=paste0("Z_occModel_upscaling_",task.id,".rds"))
+
+ggd3 <- subset(ggd,grepl("psi",ggd$Parameter))
+saveRDS(ggd3,file=paste0("psi_occModel_upscaling_",task.id,".rds"))
