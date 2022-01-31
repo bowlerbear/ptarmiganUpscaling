@@ -8,13 +8,15 @@ library(ggthemes)
 
 
 #local
-myfolder <- "data"
+#myfolder <- "data"
 #on HPC
 myfolder <- "/data/idiv_ess/ptarmiganUpscaling"
 
 #models 
-modelfolderOccu <- "/work/"
-modelfolderAbund <- "/work/"
+modelfolderOccu <- "/work/bowler/=ptarmigan_occuModel/11670197"
+modelfolderAbund <- "/work/bowler/=ptarmigan_distanceModel/12041062"
+list.files(modelfolderOccu)
+list.files(modelfolderAbund)
 
 ### check siteInfo #######################################################
 
@@ -32,31 +34,38 @@ mymodel <- modelList[task.id]
 ### get data #############################################
 
 # get occupancy model predictions
+occModel <- ifelse(mymodel=="_2","_3",mymodel)
 
-predsOcc <- list.files(modelfolderOccu, full.names=TRUE) %>%
-              str_subset("Z_")  %>%
-              str_subset(mymodel)  %>%
-              readRDS() %>%
-              filter(Parameter!="deviance") 
+predsOcc <- readRDS(paste0(modelfolderOccu,"/",
+                          "Z_occModel_upscaling",occModel,".rds"))
+names(predsOcc)
+head(predsOcc)
 
 # get abundance predictions
 
-predsDensity <- list.files(modelfolderAbund, full.names=TRUE) %>%
-                  str_subset("Density.pt")  %>%
-                  str_subset(mymodel)  %>%
-                  readRDS() %>%
-                  filter(Parameter!="deviance")
+predsDensity <- readRDS(paste0(modelfolderAbund, "/",
+                               "Density.pt_linetransectModel_variables",mymodel,".rds")) 
+
+names(predsDensity)
+head(predsDensity)
 
 ### sort indices #######################################
 
+#predsDensity <- as.data.frame(predsDensity)
+#predsDensity$Parameter <- row.names(predsDensity)
 predsDensity$ParamNu <-  as.character(sub(".*\\[([^][]+)].*", "\\1", predsDensity$Parameter))
+predsDensity <- subset(predsDensity,Parameter!="deviance")
 predsDensity <- predsDensity %>%
                   separate(ParamNu, c("Site", "Year"))
+head(predsDensity)
 
+#predsOcc <- as.data.frame(predsOcc)
+#predsOcc$Parameter <- row.names(predsOcc)
 predsOcc$ParamNu <-  as.character(sub(".*\\[([^][]+)].*", "\\1", predsOcc$Parameter))
+predsOcc <- subset(predsOcc,Parameter!="deviance")
 predsOcc <- predsOcc %>%
                   separate(ParamNu, c("Site", "Year"))
-
+head(predsOcc)
 ### mean occ ############################################
 
 #occupancy
