@@ -34,6 +34,9 @@
                       random.det.year[year_train[j]]  
                       
                       
+    #also create predicted p (p x psi instead of z)
+    Py.pred_train[j] <- p[j] * muZ[site[j],year[j]]              
+                      
     } 
   
   #### Testing dataset ####
@@ -67,6 +70,8 @@
                       beta.det.tlp2 * det.tlp2_test[j] +
                       random.det.year[year_test[j]] 
                       
+    #also create predicted p (p x psi instead of z)
+    Py.pred_test[j] <- p_test[j] * muZ_test[site[j],year[j]]
                       
     } 
   
