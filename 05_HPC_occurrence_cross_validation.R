@@ -34,9 +34,7 @@ myGridDF <- as.data.frame(mygrid,xy=T)
 
 ### listlength #####################################################
 
-#source('formattingArtDatenBank_missing_data.R')
-
-#read in list length object (made on the Rstudio server)
+#read in list length object (made on the Rstudio server - see 01 script)
 listlengthDF <- readRDS(paste(myfolder,"listlength_iDiv.rds",sep="/"))
 names(listlengthDF)[which(names(listlengthDF)=="y")] <- "species"
 
@@ -174,7 +172,7 @@ inits <- function(){list(z = zst)}
 ### scale vars #################################################################
 
 siteInfo$admGrouped <- as.numeric(as.factor(siteInfo$admGrouped))
-siteInfo[,-c(1:10)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:10)])
+siteInfo[,-c(1:11)] <- plyr::numcolwise(scale)(siteInfo[,-c(1:11)])
 
 siteInfo_test <- subset(siteInfo,grid %in% siteInfo_test$grid)
 siteInfo_train <- subset(siteInfo,grid %in% siteInfo_train$grid)
@@ -284,13 +282,13 @@ modelfile <- paste(myfolder,mymodel,sep="/")
 #n.cores = 3
 n.cores = as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "1"))
 
-n.iterations = 10000
+n.iterations = 20000
 
 out1 <- jags(bugs.data, 
              inits = inits, 
              params, 
              modelfile, 
-             n.thin = 10, 
+             n.thin = 20, 
              n.chains = n.cores, 
              n.burnin = round(n.iterations/2),
              n.iter = n.iterations,
@@ -300,8 +298,10 @@ summary(out1$Rhat$beta)
 
 #once converged update to get z, py and psi
 out2 <- update(out1,
-               parameters.to.save = c("mid.z_train","mid.psi_train","Py_train",
-                                      "mid.z_test","mid.psi_test","Py_test"),
+               parameters.to.save = c("mid.z_train","mid.psi_train",
+                                      "Py_train","Py.pred_train",
+                                      "mid.z_test","mid.psi_test",
+                                      "Py_test","Py.pred_test"),
                n.iter = 2000)
 
 ### AUC check ############################################################
@@ -366,6 +366,62 @@ for (i in 1:nu_Iteractions){
 summary(AUC_py_train)
 
 
+#Y against pypred
+
+#test 
+Py_preds <- subset(ggd2,grepl("Py.pred_test",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(interaction(Py_preds$Iteration,Py_preds$Chain))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_pypred_test <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  #select data
+  useData <- bugs.data$year_test==6
+  
+  pred <- ROCR::prediction(py.vals[useData], 
+                           bugs.data$y_test[useData])
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_pypred_test[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_pypred_test)
+
+#train
+Py_preds <- subset(ggd2,grepl("Py.pred_train",ggd2$Parameter))
+Py_preds$Iteration <- as.numeric(factor(paste(Py_preds$Iteration,Py_preds$Chain)))
+nu_Iteractions <- max(Py_preds$Iteration)
+head(Py_preds)
+
+#look through all iterations
+AUC_pypred_train <- rep(NA, nu_Iteractions)
+
+for (i in 1:nu_Iteractions){
+  
+  py.vals <- Py_preds$value[Py_preds$Iteration==i]
+  
+  #select data
+  useData <- bugs.data$year_train==6
+  
+  pred <- ROCR::prediction(py.vals[useData], 
+                           bugs.data$y_train[useData])
+  
+  #get AUC
+  perf <- ROCR::performance(pred, "auc")
+  AUC_pypred_train[i] <- perf@y.values[[1]]
+  
+}
+
+summary(AUC_pypred_train)
+
 #Z against psi
 
 #test
@@ -423,7 +479,10 @@ summary(AUC_psi_train)
 
 
 #combine all together and save
-all_AUCs <- data.frame(AUC_psi_test,AUC_psi_train,AUC_py_test,AUC_py_train)
+all_AUCs <- data.frame(AUC_psi_test,AUC_psi_train,
+                       AUC_py_test,AUC_py_train,
+                       AUC_pypred_test,AUC_pypred_train)
+
 saveRDS(all_AUCs,file=paste0("all_AUCs_fold.id_",fold.id,"_",mymodel,".rds"))
 
 ### end ##################################################################
