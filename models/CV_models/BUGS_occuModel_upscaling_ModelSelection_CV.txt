@@ -35,7 +35,7 @@
                       
                       
     #also create predicted p (p x psi instead of z)
-    Py.pred_train[j] <- p[j] * muZ[site[j],year[j]]
+    Py.pred_train[j] <- p[j] * muZ[site_train[j],year_train[j]]
                     
     } 
   
@@ -71,7 +71,7 @@
                       random.det.year[year_test[j]]  
                       
     #also create predicted p (p x psi instead of z)
-    Py.pred_test[j] <- p_test[j] * muZ_test[site[j],year[j]]
+    Py.pred_test[j] <- p_test[j] * muZ_test[site_test[j],year_test[j]]
                     
     } 
   
