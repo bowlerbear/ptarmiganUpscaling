@@ -4,7 +4,7 @@ modelPredictions <- readRDS("data/modelPredictions.rds")
 
 #total nationwide abundance is just:
 sum(modelPredictions$occ_mean * modelPredictions$density_mean)#yep, about right
-
+#1168194
 
 ### occupancy ####
 
@@ -85,6 +85,11 @@ tmap_arrange(t1,t2,nrow=1)
 
 median(sensitivityDensity$sdPop)
 median(sensitivityOcc$sdPop)
+
+temp <- tmap_arrange(t1,t2,nrow=1)
+temp
+
+tmap_save(temp, "plots/Fig_6.png",width = 6, height = 4)
 
 ### end #######################################
 
