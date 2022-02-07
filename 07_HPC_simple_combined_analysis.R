@@ -13,7 +13,8 @@ library(ggthemes)
 myfolder <- "/data/idiv_ess/ptarmiganUpscaling"
 
 #models 
-modelfolderOccu <- "/work/bowler/=ptarmigan_occuModel/11670197"
+#modelfolderOccu <- "/work/bowler/=ptarmigan_occuModel/11670197"
+modelfolderOccu <- "/work/bowler/=ptarmigan_occuModel/12072779"
 modelfolderAbund <- "/work/bowler/=ptarmigan_distanceModel/12041062"
 list.files(modelfolderOccu)
 list.files(modelfolderAbund)
@@ -34,10 +35,9 @@ mymodel <- modelList[task.id]
 ### get data #############################################
 
 # get occupancy model predictions
-occModel <- ifelse(mymodel=="_2","_3",mymodel)
 
 predsOcc <- readRDS(paste0(modelfolderOccu,"/",
-                          "Z_occModel_upscaling",occModel,".rds"))
+                          "Z_occModel_upscaling",mymodel,".rds"))
 names(predsOcc)
 head(predsOcc)
 
@@ -66,6 +66,7 @@ predsOcc <- subset(predsOcc,Parameter!="deviance")
 predsOcc <- predsOcc %>%
                   separate(ParamNu, c("Site", "Year"))
 head(predsOcc)
+
 ### mean occ ############################################
 
 #occupancy
@@ -128,11 +129,24 @@ sum(siteInfo$realAbund)
 head(predsOcc)
 head(predsDensity)
 
-#check they align
-all(predsOcc$ParamNu==predsDensity$ParamNu)
+#add grid info
+predsOcc$grid <- siteInfo_Occ$grid[match(predsOcc$Site,
+                                         siteInfo_Occ$siteIndex)]
 
-#add on density data to occupancy data frame
-predsOcc$Density <- predsDensity$value
+#add grid info
+siteInfo_Abund$siteIndex <- 1:nrow(siteInfo_Abund)
+predsDensity$grid <- siteInfo_Abund$grid[match(predsDensity$Site,siteInfo_Abund$siteIndex)]
+predsDensity$Density <- predsDensity$value
+
+#merge
+predsOcc <- predsDensity %>%
+            as_tibble() %>%
+            dplyr::select(Iteration,Chain,Year,grid,Density) %>%
+            inner_join(.,predsOcc)
+
+head(predsOcc)
+
+#cal real density
 predsOcc$realDensity <- predsOcc$value * predsOcc$Density
 
 ### annual total population size #######################
@@ -146,7 +160,22 @@ population_Annual <- predsOcc %>%
                         upperPop = quantile(totalPop, 0.975))
 
 saveRDS(population_Annual, file=paste("population_Annual",mymodel,".rds"))
-                  
+          
+### grid level abundances ###############################
+
+nuYears <- n_distinct(predsOcc$Year)
+
+population_grid <- predsOcc %>%
+  group_by(Iteration,Chain,grid) %>%
+  summarise(totalPop = sum(realDensity)/nuYears) %>%
+  group_by(grid) %>%
+  summarise(medianPop = median(totalPop),
+            sdPop = sd(totalPop),
+            lowerPop = quantile(totalPop, 0.025),
+            upperPop = quantile(totalPop, 0.975))
+
+saveRDS(population_grid, file=paste("population_grid",mymodel,".rds"))
+
 ### mean total abundance #################################
 
 nuYears <- n_distinct(predsOcc$Year)
