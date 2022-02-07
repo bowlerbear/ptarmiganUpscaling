@@ -110,7 +110,7 @@
     
     ## Priors for betas 
     
-    for(i in 1:24){ # need to change?
+    for(i in 1:24){ 
       #https://gist.github.com/oliviergimenez/8cffedd2defc32a6811d7e715b898d6a
       #simple approach
       betaT[i] ~ dnorm(0,0.01)
