@@ -218,12 +218,13 @@ model_3 <- temp %>%
   group_by(fold.id) %>%
   summarise(across(everything(),mean))
 # A tibble: 5 x 5
-#fold.id AUC_psi_test AUC_psi_train AUC_py_test AUC_py_train
-#  1       1        0.864         0.861       0.736        0.964
-#2       2        0.835         0.869       0.658        0.964
-#3       3        0.871         0.868       0.725        0.965
-#4       4        0.868         0.849       0.743        0.962
-#5       5        0.878         0.849       0.772        0.959
+#fold.id AUC_psi_test AUC_psi_train AUC_py_test AUC_py_train AUC_pypred_test AUC_pypred_train
+#<int>        <dbl>         <dbl>       <dbl>        <dbl>           <dbl>            <dbl>
+#1       1        0.860         0.859       0.740        0.967           0.914            0.922
+#2       2        0.829         0.865       0.661        0.970           0.879            0.927
+#3       3        0.870         0.866       0.719        0.969           0.883            0.925
+#4       4        0.865         0.846       0.734        0.966           0.942            0.913
+#5       5        0.877         0.850       0.737        0.965           0.930            0.917
 
 #satisfactory....
 
@@ -478,15 +479,15 @@ madData <- madFiles %>%
 #get mean and range for each Model
 madData %>%
     dplyr::group_by(Model, Type) %>%
-    dplyr::summarise(median = median(Mean),min=min(Mean),max(max(Mean)))
-#Model                                          Type  median   min `max(max(Mean))`
-#<chr>                                          <chr>  <dbl> <dbl>            <dbl>
-#  1 BUGS_occuModel_upscaling_CV.txt                test    7.49  4.95             8.14
-#2 BUGS_occuModel_upscaling_CV.txt                train   7.49  6.81             7.69
-#3 BUGS_occuModel_upscaling_LASSO_CV.txt          test    7.45  4.98            13.7 
-#4 BUGS_occuModel_upscaling_LASSO_CV.txt          train   7.41  6.79             7.64
-#5 BUGS_occuModel_upscaling_ModelSelection_CV.txt test    7.43  4.91             8.52
-#6 BUGS_occuModel_upscaling_ModelSelection_CV.txt train   7.47  6.84             7.68
+    dplyr::summarise(median = median(Mean),min=min(Mean),max=max(Mean))
+# Groups:   Model [3]
+#<chr>                                          <chr>  <dbl> <dbl> <dbl>
+#  1 BUGS_occuModel_upscaling_CV.txt                test    5.20  3.39  6.65
+#2 BUGS_occuModel_upscaling_CV.txt                train   5.01  3.81  6.24
+#3 BUGS_occuModel_upscaling_LASSO_CV.txt          test    6.08  3.67 11.6 
+#4 BUGS_occuModel_upscaling_LASSO_CV.txt          train   4.83  3.73  6.18
+#5 BUGS_occuModel_upscaling_ModelSelection_CV.txt test    5.21  3.53  7.12
+#6 BUGS_occuModel_upscaling_ModelSelection_CV.txt train   4.93  3.84  6.22
 
 #RMSE        
 rmseFiles <- list.files("model-outputs/SLURM/distanceModel/CV", full.names=TRUE) %>%
@@ -529,16 +530,24 @@ plot(mygrid)
 
 #plot density preds
 predsDensity_summary <- readRDS(paste0(modelFolder,"predsDensity_summary", models,".rds"))
-siteInfo_Abund $preds <- predsDensity_summary$myMean
+siteInfo_Abund$preds <- predsDensity_summary$myMean
 mygrid[] <- NA
 mygrid[siteInfo_Abund$grid] <-siteInfo_Abund$preds
+plot(mygrid)
+
+#simple combination (just to check)
+siteInfo_Occ$abund <- siteInfo_Abund$preds[match(siteInfo_Occ$grid,
+                                                 siteInfo_Abund$grid)]
+siteInfo_Occ$preds <- siteInfo_Occ$preds * siteInfo_Occ$abund
+mygrid[] <- NA
+mygrid[siteInfo_Occ$grid] <- siteInfo_Occ$preds
 plot(mygrid)
 
 #look at annual preds
 (populationAnnual <- readRDS(paste0(modelFolder,"population_Annual", 
                                        models,".rds")))
 
-populationAnnual %>%
+g1 <- populationAnnual %>%
   mutate(Year = as.numeric(Year)+2007) %>%
   ggplot()+
   geom_pointrange(aes(x=Year, y=medianPop, 
@@ -551,12 +560,15 @@ populationAnnual %>%
 #look at mean preds
 totalSummary <- readRDS(paste0(modelFolder,"totalSummary", models,".rds"))
 
-ggplot(totalSummary, aes(totalPop))+
+g2 <- ggplot(totalSummary, aes(totalPop))+
   geom_density(fill="red",colour="black",alpha=0.2)+
   geom_density(colour="black", size=2)+
   theme_few()+
   ylab("Probability density") + xlab("Total population size estimate")
-ggsave("plots/Fig.5.png",width=5,height=4)
+
+cowplot::plot_grid(g2,g1,labels=c("a","b"),nrow=1,ncol=2)
+
+ggsave("plots/Fig.5.png",width=9.5,height=4)
 
 summary(totalSummary$totalPop)
 quantile(totalSummary$totalPop,c(0.025,0.5,0.975))
@@ -567,21 +579,44 @@ mean(predsDensity_summary$myMean)
 sum(predsOcc_summary$myMean)*mean(predsDensity_summary$myMean)
 #with model 3 - 1207997
 
+#plot grid predictions
+(populationGrid <- readRDS(paste0(modelFolder,"population_grid", 
+                                    models,".rds")))
+
+mygrid[] <- NA
+mygrid[populationGrid$grid] <- populationGrid$medianPop
+crs(mygrid) <- equalM
+occ_tmap <- tm_shape(mygrid)+
+  tm_raster(title="a) Abundance",palette="YlGnBu",
+            breaks=c(0,50,100,200,400,800))
+occ_tmap
+
+mygrid[] <- NA
+mygrid[populationGrid$grid] <- populationGrid$sdPop
+plot(mygrid)
+crs(mygrid) <- equalM
+occ_tmap_sd <- tm_shape(mygrid)+
+  tm_raster(title="b) SD   ",palette="YlGnBu",
+            breaks=c(0,50,100,200,400))
+occ_tmap_sd
+
+temp <- tmap_arrange(occ_tmap,occ_tmap_sd,nrow=1)
+temp
+
+tmap_save(temp, "plots/Fig_4.png",width = 6, height = 4)
+
 #compare priors
 library(ggridges)
-all_ggd <- list.files(modelFolder, full.names=TRUE) %>%
+all_ggd <- list.files(paste(modelFolder,"12198176",sep="/"), full.names=TRUE) %>%
             str_subset("totalSummary") %>%
             set_names() %>%
             map_dfr(readRDS, .id="source") %>%
             as_tibble()
 
 all_ggd$Model <- NA
-all_ggd$Model[all_ggd$source=="model-outputs/SLURM/combinedModel/totalSummary _1 .rds"] <- "Only important vars"
-all_ggd$Model[all_ggd$source=="model-outputs/SLURM/combinedModel/totalSummary _2 .rds"] <- "LASSO priors"
-all_ggd$Model[all_ggd$source=="model-outputs/SLURM/combinedModel/totalSummary _3 .rds"] <- "Variable indicator"
-
-all_ggd$totalPop[all_ggd$Model=="LASSO priors" & all_ggd$totalPop>2000000] <- 2000000
-all_ggd$totalPop[all_ggd$Model=="LASSO priors" & all_ggd$totalPop<1000000] <- 1000000
+all_ggd$Model[grepl("_1", all_ggd$source)] <- "Only important vars"
+all_ggd$Model[grepl("_2", all_ggd$source)] <- "LASSO priors"
+all_ggd$Model[grepl("_3", all_ggd$source)] <- "Variable indicator"
 
 ggplot(all_ggd, aes(x = totalPop, y = Model)) + 
   geom_density_ridges2()+
@@ -597,21 +632,26 @@ ggplot(all_ggd, aes(totalPop))+
 
 ### make model predictions ####
 
+#for use in the uncertainity analysis
+
 varDF <- readRDS("data/varDF_allEnvironData_5km_idiv.rds")
 
 #run sections above to get z_preds
 out_occ <- z_preds
+out_occ$grid <- siteInfo_Occ$grid
+out_occ <- arrange(out_occ,grid)
+all(varDF$grid==out_occ$grid)
 
 #abundance predictions
 out1 <- readRDS("model-outputs/SLURM/distanceModel/outSummary_linetransectModel_variables_3.rds")
 out1 <- data.frame(out1)
 out1$Param <- row.names(out1)
 out1 <- subset(out1,grepl("Density.p",out1$Param))
+out1$grid <- siteInfo_Abund$grid
+out_dens <- arrange(out1, grid)
 
-#remove extreme preds
-out_dens <- subset(out1, mean<850)
-out_occ <- out_occ[out1$mean<850,]
-varDF <- varDF[out1$mean<850,]
+#check align
+all(out_occ$grid, out_dens$grid)
 
 #make modelPredictions
 modelPredictions <- data.frame(density_mean=out_dens$mean, density_sd = out_dens$sd,
