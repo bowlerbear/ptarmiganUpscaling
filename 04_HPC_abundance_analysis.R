@@ -159,6 +159,15 @@ all(row.names(groupInfo)==siteInfo$siteIndex)
 # summary(siteSummary$meanCount) #all above zero 
 
 
+# temp <- allData %>%
+#       filter(!is.na(totalIndiv)) %>%
+#       group_by(LinjeID,Year) %>%
+#       summarise(nuIndiv=sum(totalIndiv)) %>%
+#       group_by(LinjeID) %>%
+#       summarise(med = median(nuIndiv))
+# 
+# summary(temp$med)
+
 ### detection data ################################################
 
 allDetections <- subset(allData, !is.na(totalIndiv) & totalIndiv!=0 
