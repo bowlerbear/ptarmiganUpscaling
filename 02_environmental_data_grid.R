@@ -500,7 +500,7 @@ saveRDS(varDF,file="data/varDF_allEnvironData_5km_idiv.rds")
 
 ### group admins ####################################################################
 
-source('generalFunctions.R', encoding = 'UTF-8')
+source('generalFunctions.R', encoding = 'UTF-8'f)
 
 varDF$admGrouped <- mergeCounties(varDF$adm,further=TRUE)
 table(varDF$adm)
